@@ -151,9 +151,19 @@ class MCPManager:
         # Build env with project root in PYTHONPATH so subprocess finds mcp_servers
         project_root = self._get_project_root()
         env = dict(os.environ)
+        # Always inject the project root — critical for editable installs
+        # where the main process uses .pth but subprocesses don't
+        paths = []
         if project_root:
-            existing = env.get("PYTHONPATH", "")
-            env["PYTHONPATH"] = f"{project_root}:{existing}" if existing else project_root
+            paths.append(project_root)
+        existing = env.get("PYTHONPATH", "")
+        if existing:
+            paths.append(existing)
+        # Also add sys.path entries that might contain mcp_servers
+        for p in sys.path:
+            if p and (Path(p) / "mcp_servers").is_dir() and p not in paths:
+                paths.append(p)
+        env["PYTHONPATH"] = os.pathsep.join(paths)
 
         params = StdioServerParameters(
             command=sys.executable,
