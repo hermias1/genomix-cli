@@ -153,6 +153,58 @@ def handle_interactive():
         cmd = parts[0]
         cmd_args = parts[1] if len(parts) > 1 else ""
 
+        if cmd == "/swarm":
+            from genomix.swarm.manager import SwarmManager
+            from genomix.project.manager import ProjectManager, ProjectNotFoundError
+            try:
+                project = ProjectManager.discover(Path.cwd())
+                sm = SwarmManager(state_dir=project.root / ".genomix" / "runtime" / "swarm")
+                tasks = sm.list_tasks()
+                if not tasks:
+                    console.print("No running analyses.")
+                else:
+                    for t in tasks:
+                        console.print(f"  #{t.id}  {t.command}  {t.status.value}")
+            except ProjectNotFoundError:
+                console.print("No project found. Run 'genomix init' first.")
+            continue
+
+        if cmd == "/history":
+            from genomix.agent.session_store import SessionStore
+            from genomix.project.manager import ProjectManager, ProjectNotFoundError
+            try:
+                project = ProjectManager.discover(Path.cwd())
+                store = SessionStore(project.root / ".genomix" / "runtime" / "sessions.db")
+                if cmd_args:
+                    results = store.search(cmd_args)
+                    for r in results:
+                        console.print(f"  {r['id']}  {r['title']}")
+                else:
+                    sessions = store.list_sessions()
+                    for s in sessions:
+                        console.print(f"  {s['id']}  {s['title']}  {s['created_at']}")
+            except ProjectNotFoundError:
+                console.print("No project found.")
+            continue
+
+        if cmd == "/provider":
+            if cmd_args:
+                console.print(f"Switched to provider: {cmd_args}")
+                agent_loop = None  # Force re-init with new provider
+            else:
+                from genomix.config import load_config
+                console.print(f"Current provider: {load_config().provider}")
+            continue
+
+        if cmd == "/model":
+            if cmd_args:
+                console.print(f"Switched to model: {cmd_args}")
+                agent_loop = None
+            else:
+                from genomix.config import load_config
+                console.print(f"Current model: {load_config().model}")
+            continue
+
         if cmd in COMMAND_SKILL_MAP:
             skill_path = COMMAND_SKILL_MAP[cmd]
             try:
