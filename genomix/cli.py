@@ -125,104 +125,10 @@ def handle_init(path=None):
 
 
 def handle_interactive():
-    """Start interactive TUI session."""
-    console = Console()
-    console.print(f"[bold]🧬 Genomix CLI v{__version__}[/bold]")
-    console.print("Type your question or use /help\n")
-
-    completer = WordCompleter(SLASH_COMMANDS, sentence=True)
-    session = PromptSession(completer=completer)
-    agent_loop = None  # Lazy init on first non-command message
-
-    while True:
-        try:
-            user_input = session.prompt("genomix> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            break
-        if not user_input:
-            continue
-        if user_input in ("/quit", "/exit", "/q"):
-            break
-        if user_input == "/help":
-            for cmd in SLASH_COMMANDS[:-1]:  # exclude /quit
-                console.print(f"  {cmd}")
-            continue
-
-        # Slash command with skill
-        parts = user_input.split(maxsplit=1)
-        cmd = parts[0]
-        cmd_args = parts[1] if len(parts) > 1 else ""
-
-        if cmd == "/swarm":
-            from genomix.swarm.manager import SwarmManager
-            from genomix.project.manager import ProjectManager, ProjectNotFoundError
-            try:
-                project = ProjectManager.discover(Path.cwd())
-                sm = SwarmManager(state_dir=project.root / ".genomix" / "runtime" / "swarm")
-                tasks = sm.list_tasks()
-                if not tasks:
-                    console.print("No running analyses.")
-                else:
-                    for t in tasks:
-                        console.print(f"  #{t.id}  {t.command}  {t.status.value}")
-            except ProjectNotFoundError:
-                console.print("No project found. Run 'genomix init' first.")
-            continue
-
-        if cmd == "/history":
-            from genomix.agent.session_store import SessionStore
-            from genomix.project.manager import ProjectManager, ProjectNotFoundError
-            try:
-                project = ProjectManager.discover(Path.cwd())
-                store = SessionStore(project.root / ".genomix" / "runtime" / "sessions.db")
-                if cmd_args:
-                    results = store.search(cmd_args)
-                    for r in results:
-                        console.print(f"  {r['id']}  {r['title']}")
-                else:
-                    sessions = store.list_sessions()
-                    for s in sessions:
-                        console.print(f"  {s['id']}  {s['title']}  {s['created_at']}")
-            except ProjectNotFoundError:
-                console.print("No project found.")
-            continue
-
-        if cmd == "/provider":
-            if cmd_args:
-                console.print(f"Switched to provider: {cmd_args}")
-                agent_loop = None  # Force re-init with new provider
-            else:
-                from genomix.config import load_config
-                console.print(f"Current provider: {load_config().provider}")
-            continue
-
-        if cmd == "/model":
-            if cmd_args:
-                console.print(f"Switched to model: {cmd_args}")
-                agent_loop = None
-            else:
-                from genomix.config import load_config
-                console.print(f"Current model: {load_config().model}")
-            continue
-
-        if cmd in COMMAND_SKILL_MAP:
-            skill_path = COMMAND_SKILL_MAP[cmd]
-            try:
-                loop = create_agent_loop(skill_path=skill_path)
-                response = loop.chat(f"{cmd} {cmd_args}".strip())
-                console.print(response)
-            except Exception as e:
-                console.print(f"[red]Error: {e}[/red]")
-            continue
-
-        # Natural language → agent loop
-        try:
-            if agent_loop is None:
-                agent_loop = create_agent_loop()
-            response = agent_loop.chat(user_input)
-            console.print(response)
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
+    """Start immersive interactive TUI session."""
+    from genomix.tui import GenomixTUI
+    tui = GenomixTUI()
+    tui.run()
 
 
 def main(argv: list[str] | None = None) -> int:
