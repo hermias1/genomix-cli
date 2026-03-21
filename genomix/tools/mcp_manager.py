@@ -125,16 +125,40 @@ class MCPManager:
             server.error = str(e)[:200]
             return False
 
+    def _get_project_root(self) -> str:
+        """Find the genomix project root (where mcp_servers/ lives)."""
+        # Walk up from this file to find the repo root
+        current = Path(__file__).resolve().parent  # genomix/tools/
+        for _ in range(5):
+            current = current.parent
+            if (current / "mcp_servers").is_dir():
+                return str(current)
+        # Fallback: check PYTHONPATH
+        import os
+        for p in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+            if p and (Path(p) / "mcp_servers").is_dir():
+                return p
+        return ""
+
     async def _async_connect(self, name: str) -> None:
         """Connect to an MCP server and cache the session."""
         from contextlib import AsyncExitStack
         from mcp.client.session import ClientSession
         from mcp.client.stdio import StdioServerParameters, stdio_client
+        import os
 
         server = self.servers[name]
+        # Build env with project root in PYTHONPATH so subprocess finds mcp_servers
+        project_root = self._get_project_root()
+        env = dict(os.environ)
+        if project_root:
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{project_root}:{existing}" if existing else project_root
+
         params = StdioServerParameters(
             command=sys.executable,
             args=["-m", server.module],
+            env=env,
         )
 
         stack = AsyncExitStack()
