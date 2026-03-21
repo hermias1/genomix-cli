@@ -38,7 +38,7 @@ BANNER = r"""[bold #00d787]
 SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
     "/blast", "/msa", "/phylo", "/summary", "/search", "/explain",
-    "/swarm", "/history", "/provider", "/model", "/help", "/quit",
+    "/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
 COMMAND_SKILL_MAP = {
@@ -66,6 +66,7 @@ COMMAND_DESCRIPTIONS = {
     "/summary": "Summarize a genomic file",
     "/search": "Query databases (NCBI, Ensembl...)",
     "/explain": "Explain a variant, gene, or region",
+    "/mcp": "Manage MCP servers (connect, status)",
     "/swarm": "Show background analyses",
     "/history": "Session history",
     "/provider": "Switch AI provider",
@@ -83,6 +84,8 @@ class GenomixTUI:
         self.agent_loop = None
         self.project = None
         self.config = None
+        self.mcp_manager = None
+        self.tool_registry = None
         self._spinner_active = False
 
     def _detect_project(self):
@@ -98,23 +101,55 @@ class GenomixTUI:
         from genomix.config import load_config
         self.config = load_config()
 
+    def _ensure_tool_registry(self):
+        """Create the shared tool registry with file tools + MCP tools."""
+        if self.tool_registry is not None:
+            return
+        from genomix.tools.registry import ToolRegistry
+        from genomix.tools.file_tools import register_file_tools
+        self.tool_registry = ToolRegistry()
+        register_file_tools(self.tool_registry)
+
+    def _init_mcp(self):
+        """Initialize MCP manager and auto-connect available servers."""
+        from genomix.tools.mcp_manager import MCPManager
+        self.mcp_manager = MCPManager()
+        self.mcp_manager.check_availability()
+
+    def _connect_mcp_servers(self):
+        """Connect all available MCP servers and register tools."""
+        if not self.mcp_manager:
+            self._init_mcp()
+        self._ensure_tool_registry()
+
+        from genomix.tools.mcp_manager import ServerStatus
+
+        # Connect database servers first (no binaries needed), then biotools
+        for server in self.mcp_manager.get_server_list():
+            if server.status in (ServerStatus.MISSING_BINARY, ServerStatus.DISABLED):
+                continue
+            self.console.print(f"  [dim]Connecting to {server.display_name}...[/]", end="")
+            success = self.mcp_manager.connect(server.name)
+            if success:
+                count = self.mcp_manager.register_tools(server.name, self.tool_registry)
+                self.console.print(f" [green]✓[/] [dim]({count} tools)[/]")
+            else:
+                self.console.print(f" [red]✗[/] [dim]{server.error[:60]}[/]")
+
     def _create_agent_loop(self, skill_path=None):
         """Create a wired agent loop with UI callbacks."""
         from genomix.config import load_config, load_secrets
         from genomix.providers import get_provider
-        from genomix.tools.registry import ToolRegistry
-        from genomix.tools.file_tools import register_file_tools
         from genomix.skills.registry import SkillRegistry
         from genomix.agent.prompt_builder import build_system_prompt
         from genomix.agent.loop import AgentLoop
+
+        self._ensure_tool_registry()
 
         config = load_config()
         secrets = load_secrets()
         api_key = secrets.get(f"{config.provider}_api_key", secrets.get("anthropic_api_key", ""))
         provider = get_provider(config.provider, api_key=api_key, model=config.model)
-
-        registry = ToolRegistry()
-        register_file_tools(registry)
 
         skill_body = None
         if skill_path:
@@ -131,7 +166,7 @@ class GenomixTUI:
 
         return AgentLoop(
             provider=provider,
-            tool_registry=registry,
+            tool_registry=self.tool_registry,
             system_prompt=system_prompt,
             on_tool_call=self._on_tool_call,
             on_tool_result=self._on_tool_result,
@@ -167,6 +202,7 @@ class GenomixTUI:
         """Print project and provider status."""
         self._detect_project()
         self._load_config()
+        self._init_mcp()
 
         status = Table.grid(padding=(0, 2))
         status.add_column(style="bold #00d787")
@@ -185,6 +221,16 @@ class GenomixTUI:
         status.add_row("  Provider", f"{provider_name} ({model_name})")
         status.add_row("  Privacy", privacy)
 
+        # MCP server summary
+        from genomix.tools.mcp_manager import ServerStatus
+        available = sum(1 for s in self.mcp_manager.get_server_list() if s.status != ServerStatus.MISSING_BINARY)
+        missing = sum(1 for s in self.mcp_manager.get_server_list() if s.status == ServerStatus.MISSING_BINARY)
+        total = len(self.mcp_manager.servers)
+        mcp_str = f"{available} available"
+        if missing:
+            mcp_str += f", [dim]{missing} missing binary[/]"
+        status.add_row("  MCP Servers", f"{total} registered ({mcp_str})")
+
         self.console.print(Panel(status, border_style="#333333", padding=(0, 1)))
         self.console.print()
 
@@ -200,7 +246,7 @@ class GenomixTUI:
             ("Analysis", ["/qc", "/align", "/variant-call", "/annotate", "/pipeline"]),
             ("Comparative", ["/blast", "/msa", "/phylo"]),
             ("Exploration", ["/summary", "/search", "/explain"]),
-            ("Session", ["/swarm", "/history", "/provider", "/model", "/help", "/quit"]),
+            ("Session", ["/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit"]),
         ]
         for section_name, cmds in sections:
             table.add_row(f"  [bold dim]{section_name}[/]", "")
@@ -238,6 +284,78 @@ class GenomixTUI:
             self.console.print("\n[dim]Interrupted.[/]\n")
         except Exception as e:
             self.console.print(f"\n[red]Error: {e}[/]\n")
+
+    def _handle_mcp(self, args: str = ""):
+        """Handle /mcp command — list, connect, disconnect servers."""
+        from genomix.tools.mcp_manager import ServerStatus
+
+        if not self.mcp_manager:
+            self._init_mcp()
+
+        parts = args.strip().split(maxsplit=1)
+        subcmd = parts[0] if parts else ""
+        subcmd_arg = parts[1] if len(parts) > 1 else ""
+
+        if subcmd == "connect":
+            if not subcmd_arg:
+                # Connect all
+                self.console.print("\n[bold #00d787]  Connecting MCP servers...[/]\n")
+                self._connect_mcp_servers()
+            elif subcmd_arg in self.mcp_manager.servers:
+                self._ensure_tool_registry()
+                self.console.print(f"\n  Connecting to {subcmd_arg}...", end="")
+                success = self.mcp_manager.connect(subcmd_arg)
+                if success:
+                    count = self.mcp_manager.register_tools(subcmd_arg, self.tool_registry)
+                    self.console.print(f" [green]✓[/] ({count} tools)")
+                    self.agent_loop = None  # force re-create with new tools
+                else:
+                    self.console.print(f" [red]✗[/] {self.mcp_manager.servers[subcmd_arg].error[:80]}")
+            else:
+                self.console.print(f"  [red]Unknown server: {subcmd_arg}[/]")
+            self.console.print()
+            return
+
+        if subcmd == "disconnect":
+            if subcmd_arg in self.mcp_manager.servers:
+                self.mcp_manager.disconnect(subcmd_arg)
+                self.console.print(f"  Disconnected from {subcmd_arg}.\n")
+                self.agent_loop = None
+            else:
+                self.console.print(f"  [red]Unknown server: {subcmd_arg}[/]\n")
+            return
+
+        # Default: show status
+        self.console.print("\n[bold #00d787]  MCP Servers[/]\n")
+
+        table = Table(show_header=True, box=None, padding=(0, 2), show_edge=False)
+        table.add_column("Server", style="bold")
+        table.add_column("Category", style="dim")
+        table.add_column("Status")
+        table.add_column("Tools", justify="right")
+        table.add_column("Description", style="dim")
+
+        status_style = {
+            ServerStatus.CONNECTED: "[green]● connected[/]",
+            ServerStatus.CONNECTING: "[yellow]◌ connecting[/]",
+            ServerStatus.DISCONNECTED: "[dim]○ disconnected[/]",
+            ServerStatus.ERROR: "[red]✗ error[/]",
+            ServerStatus.DISABLED: "[dim]- disabled[/]",
+            ServerStatus.MISSING_BINARY: "[yellow]⚠ missing binary[/]",
+        }
+
+        for s in self.mcp_manager.get_server_list():
+            status_str = status_style.get(s.status, str(s.status))
+            tools_str = str(s.tools_count) if s.tools_count else "-"
+            table.add_row(f"  {s.display_name}", s.category, status_str, tools_str, s.description)
+
+        self.console.print(table)
+        self.console.print()
+
+        connected = sum(1 for s in self.mcp_manager.servers.values() if s.status == ServerStatus.CONNECTED)
+        total_tools = sum(s.tools_count for s in self.mcp_manager.servers.values())
+        self.console.print(f"  [dim]{connected} connected, {total_tools} tools available[/]")
+        self.console.print(f"  [dim]Usage: /mcp connect [name] | /mcp disconnect <name>[/]\n")
 
     def _handle_swarm(self):
         """Handle /swarm command."""
@@ -285,6 +403,11 @@ class GenomixTUI:
         self._print_banner()
         self._print_status()
 
+        # Auto-connect MCP servers
+        self.console.print("[bold #00d787]  Connecting MCP servers...[/]\n")
+        self._connect_mcp_servers()
+        self.console.print()
+
         completer = WordCompleter(SLASH_COMMANDS, sentence=True)
         session = PromptSession(
             style=STYLE,
@@ -316,6 +439,9 @@ class GenomixTUI:
             cmd_args = parts[1] if len(parts) > 1 else ""
 
             # Session commands
+            if cmd == "/mcp":
+                self._handle_mcp(cmd_args)
+                continue
             if cmd == "/swarm":
                 self._handle_swarm()
                 continue
