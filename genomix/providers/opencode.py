@@ -23,7 +23,7 @@ class OpenCodeProvider(BaseProvider):
         payload = {"model": self.model, "messages": clean_messages, "stream": False}
         if tools:
             payload["tools"] = tools
-        with httpx.Client(timeout=120) as client:
+        with httpx.Client(timeout=300) as client:
             resp = client.post(f"{self.endpoint}/v1/chat/completions", json=payload)
             if resp.status_code != 200:
                 # Fall back to no-tools call if tools cause issues

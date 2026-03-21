@@ -164,6 +164,8 @@ class MCPManager:
             if p and (Path(p) / "mcp_servers").is_dir() and p not in paths:
                 paths.append(p)
         env["PYTHONPATH"] = os.pathsep.join(paths)
+        # Suppress noisy logging in MCP server subprocesses
+        env["GENOMIX_QUIET"] = "1"
 
         params = StdioServerParameters(
             command=sys.executable,

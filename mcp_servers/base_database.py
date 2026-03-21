@@ -1,8 +1,17 @@
 """Base class for database API MCP servers."""
 import hashlib
 import json
+import logging
+import os
 import time
 from typing import Any
+
+# Suppress noisy logs when running as MCP subprocess
+if os.environ.get("GENOMIX_QUIET"):
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("mcp").setLevel(logging.WARNING)
 
 import httpx
 

@@ -1,5 +1,9 @@
 """Base class for bioinformatics tool MCP servers."""
-import json, shutil, subprocess
+import json, logging, os, shutil, subprocess
+
+if os.environ.get("GENOMIX_QUIET"):
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger("mcp").setLevel(logging.WARNING)
 
 
 class BaseBiotoolServer:
