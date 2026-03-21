@@ -400,6 +400,12 @@ class GenomixTUI:
 
     def run(self):
         """Main interactive loop."""
+        # Suppress noisy logs from MCP/httpx during interactive use
+        import logging
+        logging.getLogger("mcp").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
+
         self._print_banner()
         self._print_status()
 
