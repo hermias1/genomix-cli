@@ -1,5 +1,6 @@
 """Agent conversation loop with tool calling support."""
 from __future__ import annotations
+import json
 from typing import Any
 
 from genomix.providers.base import BaseProvider
@@ -34,8 +35,8 @@ class AgentLoop:
             response = self.provider.chat(all_messages, tools=tools)
 
             if response.tool_calls:
-                self.messages.append({"role": "assistant", "content": response.content, "tool_calls": [
-                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": tc.arguments}}
+                self.messages.append({"role": "assistant", "content": response.content or "", "tool_calls": [
+                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": json.dumps(tc.arguments) if isinstance(tc.arguments, dict) else tc.arguments}}
                     for tc in response.tool_calls
                 ]})
                 for tc in response.tool_calls:
