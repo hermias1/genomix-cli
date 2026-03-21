@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from genomix.config import GenomixConfig, load_config, load_secrets
+from genomix.config import GenomixConfig, load_config, load_secrets, save_secrets
 
 
 def test_default_config():
@@ -58,3 +58,12 @@ def test_config_mcp_servers(tmp_path):
     assert config.mcp_servers["samtools"]["enabled"] is True
     assert config.mcp_servers["samtools"]["binary_path"] == "/usr/bin/samtools"
     assert config.mcp_servers["cosmic"]["enabled"] is False
+
+
+import stat
+
+def test_save_secrets_sets_permissions(tmp_path):
+    path = tmp_path / "secrets.yaml"
+    save_secrets({"key": "value"}, secrets_path=path)
+    mode = oct(stat.S_IMODE(os.stat(path).st_mode))
+    assert mode == "0o600"

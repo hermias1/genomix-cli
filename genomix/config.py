@@ -50,3 +50,12 @@ def load_secrets(secrets_path: Path | None = None) -> dict[str, str]:
     with open(secrets_path) as f:
         data = yaml.safe_load(f) or {}
     return data
+
+
+def save_secrets(data, secrets_path=None):
+    if secrets_path is None:
+        secrets_path = GENOMIX_HOME / "secrets.yaml"
+    secrets_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(secrets_path, "w") as f:
+        yaml.dump(data, f)
+    os.chmod(secrets_path, 0o600)
