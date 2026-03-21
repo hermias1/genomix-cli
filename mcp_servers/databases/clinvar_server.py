@@ -17,11 +17,11 @@ _ncbi = BaseDatabaseServer(
 
 @mcp.tool()
 def clinvar_search(query: str) -> str:
-    """Search ClinVar for variants matching a query."""
-    params = {"db": "clinvar", "term": query, "retmax": 20, "retmode": "json"}
+    """Search ClinVar for variants matching a query (rsID, gene name, etc.)."""
+    params = {"db": "clinvar", "term": query, "retmax": 5, "retmode": "json"}
     try:
         result = _ncbi.get("esearch.fcgi", params)
-        return json.dumps(result)
+        return _ncbi.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -29,10 +29,11 @@ def clinvar_search(query: str) -> str:
 @mcp.tool()
 def clinvar_fetch(variant_ids: list[str]) -> str:
     """Fetch ClinVar records by variant IDs."""
-    params = {"db": "clinvar", "id": ",".join(variant_ids), "rettype": "clinvarset", "retmode": "xml"}
+    params = {"db": "clinvar", "id": ",".join(variant_ids[:5]), "rettype": "clinvarset", "retmode": "xml"}
     try:
         result = _ncbi.get("efetch.fcgi", params)
-        return result if isinstance(result, str) else json.dumps(result)
+        text = result if isinstance(result, str) else json.dumps(result)
+        return text[:2000] + "... [truncated]" if len(text) > 2000 else text
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -40,10 +41,10 @@ def clinvar_fetch(variant_ids: list[str]) -> str:
 @mcp.tool()
 def clinvar_summary(variant_ids: list[str]) -> str:
     """Fetch ClinVar document summaries by variant IDs."""
-    params = {"db": "clinvar", "id": ",".join(variant_ids), "retmode": "json"}
+    params = {"db": "clinvar", "id": ",".join(variant_ids[:5]), "retmode": "json"}
     try:
         result = _ncbi.get("esummary.fcgi", params)
-        return json.dumps(result)
+        return _ncbi.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 

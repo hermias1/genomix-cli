@@ -73,3 +73,39 @@ class BaseDatabaseServer:
         if use_cache:
             self._cache[key] = result
         return result
+
+    @staticmethod
+    def compact_json(data: Any, max_chars: int = 2000) -> str:
+        """Compact a JSON response to fit within token budget.
+
+        Keeps structure but truncates long strings and deep nesting."""
+        raw = json.dumps(data) if not isinstance(data, str) else data
+        if len(raw) <= max_chars:
+            return raw
+        # Try to parse and extract key fields
+        try:
+            obj = json.loads(raw) if isinstance(raw, str) else data
+        except (json.JSONDecodeError, TypeError):
+            return raw[:max_chars] + "... [truncated]"
+        compacted = _compact_value(obj, depth=0, max_depth=3)
+        result = json.dumps(compacted, ensure_ascii=False)
+        if len(result) > max_chars:
+            return result[:max_chars] + "... [truncated]"
+        return result
+
+
+def _compact_value(val: Any, depth: int, max_depth: int) -> Any:
+    """Recursively compact a JSON value."""
+    if depth > max_depth:
+        if isinstance(val, dict):
+            return f"{{...{len(val)} keys}}"
+        if isinstance(val, list):
+            return f"[...{len(val)} items]"
+        return val
+    if isinstance(val, str):
+        return val[:300] + "..." if len(val) > 300 else val
+    if isinstance(val, dict):
+        return {k: _compact_value(v, depth + 1, max_depth) for k, v in list(val.items())[:20]}
+    if isinstance(val, list):
+        return [_compact_value(v, depth + 1, max_depth) for v in val[:10]]
+    return val

@@ -16,12 +16,12 @@ _ncbi = BaseDatabaseServer(
 
 
 @mcp.tool()
-def ncbi_search(database: str, query: str, max_results: int = 20) -> str:
+def ncbi_search(database: str, query: str, max_results: int = 10) -> str:
     """Search an NCBI Entrez database and return matching IDs."""
     params = {"db": database, "term": query, "retmax": max_results, "retmode": "json"}
     try:
         result = _ncbi.get("esearch.fcgi", params)
-        return json.dumps(result)
+        return _ncbi.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -32,7 +32,8 @@ def ncbi_fetch(database: str, ids: list[str], rettype: str = "gb", retmode: str 
     params = {"db": database, "id": ",".join(ids), "rettype": rettype, "retmode": retmode}
     try:
         result = _ncbi.get("efetch.fcgi", params)
-        return result if isinstance(result, str) else json.dumps(result)
+        text = result if isinstance(result, str) else json.dumps(result)
+        return text[:3000] + "... [truncated]" if len(text) > 3000 else text
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -43,7 +44,7 @@ def ncbi_summary(database: str, ids: list[str]) -> str:
     params = {"db": database, "id": ",".join(ids), "retmode": "json"}
     try:
         result = _ncbi.get("esummary.fcgi", params)
-        return json.dumps(result)
+        return _ncbi.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -56,10 +57,9 @@ def ncbi_gene_info(gene_query: str) -> str:
         search_result = _ncbi.get("esearch.fcgi", params)
         ids = search_result.get("esearchresult", {}).get("idlist", [])
         if not ids:
-            return json.dumps({"error": "No gene found for query", "query": gene_query})
-        summary_params = {"db": "gene", "id": ",".join(ids), "retmode": "json"}
-        summary = _ncbi.get("esummary.fcgi", summary_params)
-        return json.dumps(summary)
+            return json.dumps({"error": "No gene found", "query": gene_query})
+        summary = _ncbi.get("esummary.fcgi", {"db": "gene", "id": ",".join(ids), "retmode": "json"})
+        return _ncbi.compact_json(summary)
     except Exception as e:
         return json.dumps({"error": str(e)})
 

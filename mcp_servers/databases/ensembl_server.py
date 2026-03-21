@@ -21,7 +21,7 @@ def ensembl_lookup_gene(species: str, symbol: str) -> str:
     params = {"content-type": "application/json"}
     try:
         result = _ensembl.get(f"xrefs/symbol/{species}/{symbol}", params)
-        return json.dumps(result)
+        return _ensembl.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -32,7 +32,7 @@ def ensembl_get_sequence(id: str, type: str = "genomic") -> str:
     params = {"content-type": "application/json", "type": type}
     try:
         result = _ensembl.get(f"sequence/id/{id}", params)
-        return json.dumps(result)
+        return _ensembl.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -43,7 +43,7 @@ def ensembl_vep(species: str, hgvs_notation: str) -> str:
     params = {"content-type": "application/json"}
     try:
         result = _ensembl.get(f"vep/{species}/hgvs/{hgvs_notation}", params)
-        return json.dumps(result)
+        return _ensembl.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -54,7 +54,7 @@ def ensembl_variant_info(species: str, variant_id: str) -> str:
     params = {"content-type": "application/json"}
     try:
         result = _ensembl.get(f"variation/{species}/{variant_id}", params)
-        return json.dumps(result)
+        return _ensembl.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 

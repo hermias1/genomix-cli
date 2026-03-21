@@ -18,10 +18,10 @@ _ncbi = BaseDatabaseServer(
 @mcp.tool()
 def dbsnp_search(query: str) -> str:
     """Search dbSNP for variants matching a query."""
-    params = {"db": "snp", "term": query, "retmax": 20, "retmode": "json"}
+    params = {"db": "snp", "term": query, "retmax": 5, "retmode": "json"}
     try:
         result = _ncbi.get("esearch.fcgi", params)
-        return json.dumps(result)
+        return _ncbi.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -32,7 +32,8 @@ def dbsnp_fetch(rs_ids: list[str]) -> str:
     params = {"db": "snp", "id": ",".join(rs_ids), "rettype": "json", "retmode": "text"}
     try:
         result = _ncbi.get("efetch.fcgi", params)
-        return result if isinstance(result, str) else json.dumps(result)
+        text = result if isinstance(result, str) else json.dumps(result)
+        return text[:2000] + "... [truncated]" if len(text) > 2000 else text
     except Exception as e:
         return json.dumps({"error": str(e)})
 
@@ -43,7 +44,7 @@ def dbsnp_summary(rs_ids: list[str]) -> str:
     params = {"db": "snp", "id": ",".join(rs_ids), "retmode": "json"}
     try:
         result = _ncbi.get("esummary.fcgi", params)
-        return json.dumps(result)
+        return _ncbi.compact_json(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
