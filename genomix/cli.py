@@ -94,6 +94,22 @@ def create_agent_loop(skill_path=None):
     return AgentLoop(provider=provider, tool_registry=registry, system_prompt=system_prompt)
 
 
+def handle_run(slash_command, args, output_format="text"):
+    skill_path = COMMAND_SKILL_MAP.get(slash_command)
+    loop = create_agent_loop(skill_path=skill_path)
+    message = f"{slash_command} {' '.join(args)}".strip()
+    result = loop.chat(message)
+    if output_format == "json":
+        import json
+        return json.dumps({"command": slash_command, "response": result})
+    return result
+
+
+def handle_ask(question):
+    loop = create_agent_loop()
+    return loop.chat(question)
+
+
 def handle_init(path=None):
     """Interactive project initialization."""
     console = Console()
@@ -168,6 +184,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "setup":
         print("Setup wizard not yet implemented.")
+        return 0
+    if args.command == "run":
+        print(handle_run(args.slash_command, args.args or [], args.format))
+        return 0
+    if args.command == "ask":
+        question = " ".join(args.question) if args.question else sys.stdin.read().strip()
+        print(handle_ask(question))
         return 0
     print(f"Command '{args.command}' not yet implemented.")
     return 0
