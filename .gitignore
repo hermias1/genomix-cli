@@ -10,3 +10,5 @@ build/
 *.vcf.gz
 *.fastq.gz
 .pytest_cache/
+.venv/
+firebase-debug.log
