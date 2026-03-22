@@ -46,10 +46,23 @@ class ToolCallComplete(StreamEvent):
     arguments: dict
 
 @dataclass
+class ToolResult(StreamEvent):
+    """Result from an executed tool call (preview for TUI display)."""
+    tool_name: str
+    result: str  # First 200 chars
+
+@dataclass
+class ErrorEvent(StreamEvent):
+    """An error occurred during streaming."""
+    message: str
+
+@dataclass
 class StreamDone(StreamEvent):
     """The LLM has finished its response (no more events)."""
     pass
 ```
+
+Note: `ToolCallArgs` is internal to the provider→agent loop communication. It is never yielded to the TUI. The TUI only sees: `ToolCallStart`, `ToolCallComplete`, `ToolResult`, `TextDelta`, `ErrorEvent`, `StreamDone`.
 
 ## 3. Provider Streaming Interface
 
@@ -101,24 +114,34 @@ def chat_stream(self, messages, tools=None):
                             yield ToolCallArgs(id=tc.get("id", ""), partial_args=tc["function"]["arguments"])
 ```
 
-Tool call completion is detected when the next chunk has no more `tool_calls` or starts text content. The agent loop (not the provider) is responsible for accumulating `ToolCallArgs` into complete arguments and yielding `ToolCallComplete`.
+The provider tracks the current tool call id by index. Ollama, like OpenAI, only includes the `id` field on the first chunk of a tool call. The provider must store `current_tool_id` from `ToolCallStart` and reuse it for subsequent `ToolCallArgs` events.
+
+The agent loop (not the provider) is responsible for accumulating `ToolCallArgs` into complete arguments and yielding `ToolCallComplete`. Tool call completion is detected when `StreamDone` is received. The provider MUST always yield `StreamDone` at the end — if the HTTP stream ends without the `[DONE]` sentinel, yield `StreamDone` after exiting the loop.
 
 ### ClaudeProvider (Anthropic SDK)
 
 ```python
 def chat_stream(self, messages, tools=None):
-    with self.client.messages.stream(model=self.model, max_tokens=8192, messages=messages, tools=tools_converted) as stream:
+    kwargs = self._build_request(messages, tools)  # reuse existing request builder
+    current_block_id = None  # Track content block id across delta events
+
+    with self.client.messages.stream(**kwargs) as stream:
         for event in stream:
             if event.type == "content_block_start":
                 if event.content_block.type == "tool_use":
-                    yield ToolCallStart(id=event.content_block.id, name=event.content_block.name)
+                    current_block_id = event.content_block.id
+                    yield ToolCallStart(id=current_block_id, name=event.content_block.name)
+                elif event.content_block.type == "text":
+                    current_block_id = None
             elif event.type == "content_block_delta":
                 if event.delta.type == "text_delta":
                     yield TextDelta(text=event.delta.text)
                 elif event.delta.type == "input_json_delta":
-                    yield ToolCallArgs(id=..., partial_args=event.delta.partial_json)
+                    yield ToolCallArgs(id=current_block_id, partial_args=event.delta.partial_json)
             elif event.type == "message_stop":
                 yield StreamDone()
+    # Safety: always yield StreamDone if stream ends without message_stop
+    yield StreamDone()
 ```
 
 ### OpenAIProvider
@@ -126,18 +149,26 @@ def chat_stream(self, messages, tools=None):
 ```python
 def chat_stream(self, messages, tools=None):
     stream = self.client.chat.completions.create(model=self.model, messages=messages, tools=tools, stream=True)
+    current_tool_ids = {}  # index -> id (OpenAI only sends id on first chunk per tool)
+
     for chunk in stream:
         delta = chunk.choices[0].delta
         if delta.content:
             yield TextDelta(text=delta.content)
         if delta.tool_calls:
             for tc in delta.tool_calls:
-                if tc.function.name:
-                    yield ToolCallStart(id=tc.id, name=tc.function.name)
-                if tc.function.arguments:
-                    yield ToolCallArgs(id=tc.id, partial_args=tc.function.arguments)
-        if chunk.choices[0].finish_reason == "stop":
+                idx = tc.index
+                if tc.id:
+                    current_tool_ids[idx] = tc.id
+                tc_id = current_tool_ids.get(idx, f"call_{idx}")
+                if tc.function and tc.function.name:
+                    yield ToolCallStart(id=tc_id, name=tc.function.name)
+                if tc.function and tc.function.arguments:
+                    yield ToolCallArgs(id=tc_id, partial_args=tc.function.arguments)
+        if chunk.choices[0].finish_reason in ("stop", "tool_calls"):
             yield StreamDone()
+            return
+    yield StreamDone()  # Safety: stream ended without finish_reason
 ```
 
 ## 4. Agent Loop Streaming
@@ -216,6 +247,21 @@ def chat_stream(self, user_message: str) -> Generator[StreamEvent, None, None]:
 
     # Max iterations: force synthesis
     yield from self._force_final_synthesis_stream()
+
+def _force_final_synthesis_stream(self) -> Generator[StreamEvent, None, None]:
+    """Force the LLM to respond without tools (streaming)."""
+    self.messages.append({
+        "role": "user",
+        "content": "You have enough information. Do not call any more tools. "
+                   "Provide the best final answer now, clearly noting uncertainty where needed.",
+    })
+    for event in self.provider.chat_stream(self._build_messages(), tools=None):
+        if isinstance(event, TextDelta):
+            yield event
+        elif isinstance(event, StreamDone):
+            yield event
+            return
+    yield StreamDone()
 ```
 
 Note: Add a `ToolResult` event type for the TUI to display tool results:
@@ -295,11 +341,15 @@ class StreamingRenderer:
             self._buffer = ""
 
     def _rerender_paragraph(self, text):
-        """Replace raw text with Markdown-rendered version."""
-        # For simplicity: just print Markdown after the raw text
-        # The raw text is already printed; we append the formatted version
-        # In practice, we use ANSI escape codes or Rich Live to overwrite
-        pass  # Implementation detail — see plan
+        """Replace raw text with Markdown-rendered version.
+
+        Approach: Use Rich Live with a growing list of Renderables.
+        - Completed paragraphs are rendered as Rich Markdown objects
+        - The current streaming paragraph is rendered as plain Text
+        - Rich Live updates the display in-place without flickering
+        """
+        self._finalized.append(Markdown(text))
+        # Live context re-renders all finalized paragraphs + current buffer
 ```
 
 ### TUI integration
@@ -312,12 +362,31 @@ with self.console.status("🧬 Analyzing..."):
     response = loop.chat(message)
 self.console.print(Markdown(response))
 
-# NEW: streaming renderer
+# NEW: streaming renderer with Rich Live
 renderer = StreamingRenderer(self.console)
-self.console.print()  # blank line before response
+self.console.print()
 for event in loop.chat_stream(message):
     renderer.handle_event(event)
 ```
+
+**Rendering approach: Rich Live**
+
+The `StreamingRenderer` uses `rich.live.Live` internally:
+- It maintains a `Group` of renderables: finalized paragraphs (Markdown) + current buffer (Text)
+- On each `TextDelta`: append to buffer, update the Live display
+- On paragraph boundary (`\n\n`): convert buffer to `Markdown`, add to finalized list, clear buffer
+- On `StreamDone`: finalize remaining buffer, stop Live
+- Tool calls (`ToolCallStart`, `ToolResult`) are printed OUTSIDE Live (using `live.console.print()`) to avoid them being overwritten
+
+This avoids ANSI cursor manipulation entirely — Rich handles all terminal positioning.
+
+### Deprecation of callbacks
+
+The existing `AgentLoop` callback parameters (`on_tool_call`, `on_tool_result`, `on_thinking`) are deprecated. They remain in the constructor signature for backward compatibility but are not called in the streaming path. The `chat()` non-streaming wrapper does not fire them either — callers should migrate to `chat_stream()` events. The callbacks will be removed in v0.3.0.
+
+### Swarm manager
+
+Swarm-launched analyses continue to use `chat()` (non-streaming). Streaming is interactive-only. This is explicitly out of scope for this spec.
 
 ## 6. Edge Cases
 
