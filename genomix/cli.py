@@ -10,7 +10,7 @@ from rich.console import Console
 
 SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
-    "/blast", "/msa", "/phylo", "/summary", "/search", "/explain",
+    "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
     "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
@@ -25,6 +25,7 @@ COMMAND_SKILL_MAP = {
     "/summary": "exploration/sequence-summary",
     "/search": "exploration/database-search",
     "/explain": "exploration/variant-explain",
+    "/report": "reporting/clinical-report",
 }
 
 

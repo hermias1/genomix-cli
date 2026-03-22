@@ -33,7 +33,7 @@ BANNER = r"""[bold #00d787]
 
 SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
-    "/blast", "/msa", "/phylo", "/summary", "/search", "/explain",
+    "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
     "/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
@@ -48,6 +48,7 @@ COMMAND_SKILL_MAP = {
     "/summary": "exploration/sequence-summary",
     "/search": "exploration/database-search",
     "/explain": "exploration/variant-explain",
+    "/report": "reporting/clinical-report",
 }
 
 COMMAND_DESCRIPTIONS = {
@@ -62,6 +63,7 @@ COMMAND_DESCRIPTIONS = {
     "/summary": "Summarize a genomic file",
     "/search": "Query databases (NCBI, Ensembl...)",
     "/explain": "Explain a variant, gene, or region",
+    "/report": "Generate clinical HTML report from VCF",
     "/mcp": "Manage MCP servers (connect, status)",
     "/swarm": "Show background analyses",
     "/history": "Session history",
@@ -244,6 +246,7 @@ class GenomixTUI:
             ("Analysis", ["/qc", "/align", "/variant-call", "/annotate", "/pipeline"]),
             ("Comparative", ["/blast", "/msa", "/phylo"]),
             ("Exploration", ["/summary", "/search", "/explain"]),
+            ("Reporting", ["/report"]),
             ("Session", ["/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit"]),
         ]
         for section_name, cmds in sections:
@@ -402,6 +405,84 @@ class GenomixTUI:
                     self.console.print(f"  [bold]{s['id']}[/]  {s['title']}  [dim]{s['created_at']}[/]")
         self.console.print()
 
+    def _handle_report(self, args: str):
+        """Generate a clinical HTML report from a VCF file."""
+        import json as json_mod
+        from genomix.report import generate_report, save_report
+
+        parts = args.split()
+        vcf_path = parts[0]
+        output_path = None
+        if "--output" in parts:
+            idx = parts.index("--output")
+            if idx + 1 < len(parts):
+                output_path = Path(parts[idx + 1])
+
+        if not Path(vcf_path).exists():
+            self.console.print(f"[red]  File not found: {vcf_path}[/]\n")
+            return
+
+        self.console.print(f"\n[bold #00d787]  Generating clinical report for {vcf_path}...[/]\n")
+
+        # Use agent with clinical-report skill to analyze
+        loop = self._create_agent_loop(skill_path="reporting/clinical-report")
+        prompt = f"Generate a clinical variant report for the file: {vcf_path}. Respond ONLY with the JSON block as specified in your instructions."
+
+        # Collect response (non-streaming for report — need to parse JSON)
+        response = loop.chat(prompt)
+
+        # Try to parse JSON from response
+        try:
+            # Find JSON block in response
+            json_start = response.find("{")
+            json_end = response.rfind("}") + 1
+            if json_start == -1:
+                raise ValueError("No JSON found in response")
+            data = json_mod.loads(response[json_start:json_end])
+
+            variants = data.get("variants", [])
+            interpretation = data.get("interpretation", "<p>No interpretation available.</p>")
+            recommendations = data.get("recommendations", "<p>No recommendations available.</p>")
+
+            # Determine reference from project
+            reference = "GRCh38"
+            if self.project:
+                reference = self.project.reference_genome
+
+            html = generate_report(
+                filename=vcf_path,
+                variants=variants,
+                interpretation=interpretation,
+                recommendations=recommendations,
+                reference=reference,
+            )
+
+            # Save
+            if output_path is None:
+                stem = Path(vcf_path).stem
+                if self.project:
+                    output_path = self.project.root / "reports" / f"{stem}_report.html"
+                else:
+                    output_path = Path(f"{stem}_report.html")
+
+            saved = save_report(html, output_path)
+            self.console.print(f"[green]  ✓ Report saved to {saved}[/]")
+            self.console.print(f"[dim]    Open with: open {saved}[/]\n")
+
+            # Show summary
+            self.console.print(f"  [bold]{len(variants)} variants[/] analyzed\n")
+            for v in variants:
+                sig = v.get("significance", "?")
+                color = {"Pathogenic": "red", "Likely_pathogenic": "yellow", "Risk_factor": "magenta"}.get(sig, "dim")
+                self.console.print(f"    [{color}]●[/] {v.get('gene', '?')} — {v.get('variant', '')} — {sig}")
+            self.console.print()
+
+        except (json_mod.JSONDecodeError, ValueError) as e:
+            self.console.print(f"[yellow]  Could not generate structured report. Showing raw analysis:[/]\n")
+            from rich.markdown import Markdown
+            self.console.print(Markdown(response))
+            self.console.print()
+
     def run(self):
         """Main interactive loop."""
         # Suppress noisy logs from MCP/httpx during interactive use
@@ -489,6 +570,13 @@ class GenomixTUI:
                 else:
                     self._load_config()
                     self.console.print(f"  Model: [bold]{self.config.model}[/]\n")
+                continue
+
+            if cmd == "/report":
+                if not cmd_args:
+                    self.console.print("[dim]  Usage: /report <vcf_file> [--output path.html][/]\n")
+                    continue
+                self._handle_report(cmd_args)
                 continue
 
             # Skill-mapped slash commands
