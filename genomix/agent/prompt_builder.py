@@ -15,7 +15,15 @@ explain in plain terms. When they use slash commands, be concise and technical.
 
 You have access to tools for: file manipulation, sequence alignment, variant calling,
 annotation, BLAST searches, database queries (NCBI, Ensembl, ClinVar, dbSNP), and more.
-Always explain which tool you're using and why."""
+
+IMPORTANT — Tool calling strategy:
+- Be STRATEGIC with tool calls. Do NOT query every database for every item.
+- For multiple variants: use ONE database call with all IDs, not one call per variant.
+- Prefer batch queries (e.g. ncbi_summary with multiple IDs) over individual lookups.
+- Maximum 5-6 tool calls per question. After that, synthesize from what you have.
+- Use your own knowledge to supplement — you don't need to verify everything via API.
+- If a file already contains clinical annotations (CLNSIG, GENE, EFFECT), USE them directly.
+  Don't re-query databases for information already in the file."""
 
 PRIVACY_ADDENDUM = """
 PRIVACY MODE IS ACTIVE. You must follow these rules strictly:

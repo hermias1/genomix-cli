@@ -168,6 +168,7 @@ class GenomixTUI:
             provider=provider,
             tool_registry=self.tool_registry,
             system_prompt=system_prompt,
+            max_iterations=10,
             on_tool_call=self._on_tool_call,
             on_tool_result=self._on_tool_result,
             on_thinking=self._on_thinking,
