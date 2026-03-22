@@ -30,7 +30,30 @@ class OpenAIProvider(BaseProvider):
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
     def chat_stream(self, messages, tools=None):
-        raise NotImplementedError
+        from genomix.providers.base import TextDelta, ToolCallStart, ToolCallArgs, StreamDone
+        kwargs = {"model": self.model, "messages": messages, "stream": True}
+        if tools:
+            kwargs["tools"] = tools
+        stream = self.client.chat.completions.create(**kwargs)
+        current_tool_ids = {}
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield TextDelta(text=delta.content)
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if tc.id:
+                        current_tool_ids[idx] = tc.id
+                    tc_id = current_tool_ids.get(idx, f"call_{idx}")
+                    if tc.function and tc.function.name:
+                        yield ToolCallStart(id=tc_id, name=tc.function.name)
+                    if tc.function and tc.function.arguments:
+                        yield ToolCallArgs(id=tc_id, partial_args=tc.function.arguments)
+            if chunk.choices[0].finish_reason in ("stop", "tool_calls"):
+                yield StreamDone()
+                return
+        yield StreamDone()
 
     def supports_tool_calling(self): return True
     def max_context_length(self): return MODEL_CONTEXT.get(self.model, 128_000)
