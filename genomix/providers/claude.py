@@ -27,7 +27,28 @@ class ClaudeProvider(BaseProvider):
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
     def chat_stream(self, messages, tools=None):
-        raise NotImplementedError
+        from genomix.providers.base import TextDelta, ToolCallStart, ToolCallArgs, StreamDone
+        kwargs = {"model": self.model, "max_tokens": 8192, "messages": messages}
+        if tools:
+            kwargs["tools"] = [self._convert_tool(t) for t in tools]
+        current_block_id = None
+        with self.client.messages.stream(**kwargs) as stream:
+            for event in stream:
+                if event.type == "content_block_start":
+                    if event.content_block.type == "tool_use":
+                        current_block_id = event.content_block.id
+                        yield ToolCallStart(id=current_block_id, name=event.content_block.name)
+                    elif event.content_block.type == "text":
+                        current_block_id = None
+                elif event.type == "content_block_delta":
+                    if event.delta.type == "text_delta":
+                        yield TextDelta(text=event.delta.text)
+                    elif event.delta.type == "input_json_delta":
+                        yield ToolCallArgs(id=current_block_id, partial_args=event.delta.partial_json)
+                elif event.type == "message_stop":
+                    yield StreamDone()
+                    return
+        yield StreamDone()
 
     def supports_tool_calling(self) -> bool:
         return True
