@@ -183,3 +183,42 @@ def test_agent_chat_uses_stream():
     loop = AgentLoop(provider=provider, tool_registry=ToolRegistry())
     result = loop.chat("hi")
     assert result == "result"
+
+
+# --- StreamingRenderer tests ---
+
+from io import StringIO
+from rich.console import Console
+from genomix.tui_renderer import StreamingRenderer
+
+
+def test_renderer_text_delta():
+    console = Console(file=StringIO(), force_terminal=True)
+    renderer = StreamingRenderer(console)
+    renderer.handle_event(TextDelta(text="Hello"))
+    renderer.handle_event(TextDelta(text=" world"))
+    renderer.handle_event(StreamDone())
+    output = console.file.getvalue()
+    assert "Hello" in output
+    assert "world" in output
+
+
+def test_renderer_tool_call():
+    console = Console(file=StringIO(), force_terminal=True)
+    renderer = StreamingRenderer(console)
+    renderer.handle_event(ToolCallStart(id="c1", name="read_file"))
+    renderer.handle_event(ToolCallComplete(id="c1", name="read_file", arguments={"path": "x.vcf"}))
+    renderer.handle_event(ToolResult(tool_name="read_file", result="file contents here"))
+    output = console.file.getvalue()
+    assert "read_file" in output
+
+
+def test_renderer_paragraph_detection():
+    console = Console(file=StringIO(), force_terminal=True)
+    renderer = StreamingRenderer(console)
+    renderer.handle_event(TextDelta(text="Para one.\n\n"))
+    renderer.handle_event(TextDelta(text="Para two."))
+    renderer.handle_event(StreamDone())
+    output = console.file.getvalue()
+    assert "Para one" in output
+    assert "Para two" in output
