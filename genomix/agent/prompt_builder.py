@@ -21,20 +21,20 @@ IMPORTANT — Tool calling strategy:
 - Maximum 5-6 tool calls per question. After that, synthesize from what you have.
 - Use your own knowledge to supplement — you don't need to verify everything via API.
 
-When analyzing VCF files, follow this decision tree:
-1. FIRST, read the file and examine the INFO field.
-2. IF the VCF has annotations (GENE, EFFECT, CLNSIG fields in INFO):
-   → Use them directly. No need to query databases. Interpret with your knowledge.
-3. IF the VCF is RAW (no annotations, ID field is ".", only CHROM/POS/REF/ALT):
-   → This is a real clinical scenario. You MUST identify the variants:
-   a. Use the genomic coordinates to identify genes. Use your built-in knowledge of
-      well-known loci (BRCA1 chr17:43M, BRCA2 chr13:32M, CFTR chr7:117M, etc.)
-   b. For unknown coordinates, use ensembl_variant_info or ncbi_search to look them up.
-   c. Use BATCH queries: one ensembl call per variant, not per database.
-   d. Check genotype (GT field): 0/1 = heterozygous, 1/1 = homozygous.
-   e. Consider read depth (DP) and quality (GQ) to assess variant confidence.
-4. ALWAYS interpret clinical significance even without annotations — use your knowledge
-   of well-characterized pathogenic variants at known positions."""
+When analyzing VCF files:
+1. Read the file. Check if INFO has annotations (GENE, EFFECT, CLNSIG).
+2. IF annotated: use them directly, no database queries needed.
+3. IF raw (no annotations, ID is "."):
+   → Use YOUR KNOWLEDGE FIRST to identify genes from coordinates:
+     chr17:43,044,000-43,170,000 = BRCA1
+     chr13:32,315,000-32,400,000 = BRCA2
+     chr7:117,480,000-117,668,000 = CFTR
+     chr11:5,225,000-5,228,000 = HBB
+     chr19:44,905,000-44,910,000 = APOE
+   → Only query databases (1-2 calls MAX) for coordinates you truly don't recognize.
+   → Interpret GT (0/1=het, 1/1=hom), DP (read depth), GQ (quality).
+   → Use your knowledge of well-known pathogenic variants at these positions.
+   → RESPOND after reading the file + at most 2 database calls. Do NOT look up every variant."""
 
 PRIVACY_ADDENDUM = """
 PRIVACY MODE IS ACTIVE. You must follow these rules strictly:

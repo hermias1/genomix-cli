@@ -140,6 +140,7 @@ class GenomixTUI:
         """Create a wired agent loop with UI callbacks."""
         from genomix.config import load_config, load_secrets
         from genomix.providers import get_provider
+        from genomix.runtime import get_skill_dirs, is_local_provider
         from genomix.skills.registry import SkillRegistry
         from genomix.agent.prompt_builder import build_system_prompt
         from genomix.agent.loop import AgentLoop
@@ -153,13 +154,13 @@ class GenomixTUI:
 
         skill_body = None
         if skill_path:
-            skills_dirs = [Path(__file__).parent.parent / "skills"]
+            skills_dirs = get_skill_dirs()
             skill_registry = SkillRegistry(skills_dirs)
             skill = skill_registry.get_skill_by_path(skill_path)
             if skill:
                 skill_body = skill.body
 
-        privacy = config.privacy_mode or config.provider == "opencode"
+        privacy = config.privacy_mode or is_local_provider(config.provider)
         system_prompt = build_system_prompt(
             project=self.project, skill_body=skill_body, privacy_mode=privacy
         )
@@ -168,7 +169,7 @@ class GenomixTUI:
             provider=provider,
             tool_registry=self.tool_registry,
             system_prompt=system_prompt,
-            max_iterations=10,
+            max_iterations=8,
             on_tool_call=self._on_tool_call,
             on_tool_result=self._on_tool_result,
             on_thinking=self._on_thinking,
@@ -274,12 +275,20 @@ class GenomixTUI:
                 spinner="dots",
                 spinner_style="#00d787",
             ):
+                start_index = len(loop.messages)
                 response = loop.chat(message)
 
             # Render response as markdown
             self.console.print()
             self.console.print(Markdown(response))
             self.console.print()
+
+            if self.project:
+                from genomix.agent.session_store import SessionStore
+
+                title = (message.splitlines()[0][:80] or "Session").strip()
+                store = SessionStore(self.project.root / ".genomix" / "runtime" / "sessions.db")
+                store.save_session(loop.messages[start_index:], title=title)
 
         except KeyboardInterrupt:
             self.console.print("\n[dim]Interrupted.[/]\n")
@@ -457,6 +466,16 @@ class GenomixTUI:
                 continue
             if cmd == "/provider":
                 if cmd_args:
+                    from genomix.config import load_config, save_config
+                    from genomix.providers import SUPPORTED_PROVIDERS
+
+                    if cmd_args not in SUPPORTED_PROVIDERS:
+                        self.console.print(f"[red]  Unknown provider: {cmd_args}[/]\n")
+                        continue
+                    config = load_config()
+                    config.provider = cmd_args
+                    save_config(config)
+                    self.config = config
                     self.console.print(f"[#00d787]  Switched to provider: {cmd_args}[/]\n")
                     self.agent_loop = None
                 else:
@@ -465,6 +484,12 @@ class GenomixTUI:
                 continue
             if cmd == "/model":
                 if cmd_args:
+                    from genomix.config import load_config, save_config
+
+                    config = load_config()
+                    config.model = cmd_args
+                    save_config(config)
+                    self.config = config
                     self.console.print(f"[#00d787]  Switched to model: {cmd_args}[/]\n")
                     self.agent_loop = None
                 else:
