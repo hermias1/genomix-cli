@@ -1,0 +1,354 @@
+# Genomix CLI v0.2.0 — Streaming Responses Design Specification
+
+**Date:** 2026-03-22
+**Status:** Approved
+**Scope:** Streaming for all 3 providers (Ollama, Claude, OpenAI) + agent loop + TUI renderer
+
+---
+
+## 1. Goal
+
+Replace the current "spinner → full response" pattern with real-time token-by-token streaming. Text flows as it's generated, tool calls appear immediately, and markdown is rendered paragraph-by-paragraph. All 3 providers support streaming.
+
+## 2. Stream Event Types
+
+All streaming communication uses typed events defined in `genomix/providers/base.py`:
+
+```python
+from dataclasses import dataclass
+
+class StreamEvent:
+    """Base class for streaming events."""
+    pass
+
+@dataclass
+class TextDelta(StreamEvent):
+    """A fragment of text from the LLM."""
+    text: str
+
+@dataclass
+class ToolCallStart(StreamEvent):
+    """The LLM begins a tool call."""
+    id: str
+    name: str
+
+@dataclass
+class ToolCallArgs(StreamEvent):
+    """Partial JSON arguments for a tool call (streamed incrementally)."""
+    id: str
+    partial_args: str
+
+@dataclass
+class ToolCallComplete(StreamEvent):
+    """A tool call's arguments are fully received and parsed."""
+    id: str
+    name: str
+    arguments: dict
+
+@dataclass
+class StreamDone(StreamEvent):
+    """The LLM has finished its response (no more events)."""
+    pass
+```
+
+## 3. Provider Streaming Interface
+
+### BaseProvider changes
+
+Add `chat_stream()` as a generator method alongside existing `chat()`:
+
+```python
+class BaseProvider(ABC):
+    @abstractmethod
+    def chat(self, messages, tools=None) -> ProviderResponse:
+        """Non-streaming: returns complete response."""
+        ...
+
+    @abstractmethod
+    def chat_stream(self, messages, tools=None) -> Generator[StreamEvent, None, None]:
+        """Streaming: yields StreamEvents as they arrive."""
+        ...
+```
+
+### OpenCodeProvider (Ollama)
+
+```python
+def chat_stream(self, messages, tools=None):
+    payload = {"model": self.model, "messages": clean_messages, "stream": True}
+    if tools:
+        payload["tools"] = tools
+    with httpx.Client(timeout=300) as client:
+        with client.stream("POST", f"{self.endpoint}/v1/chat/completions", json=payload) as resp:
+            for line in resp.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                if line == "data: [DONE]":
+                    yield StreamDone()
+                    return
+                chunk = json.loads(line[6:])
+                delta = chunk["choices"][0]["delta"]
+
+                # Text content
+                if delta.get("content"):
+                    yield TextDelta(text=delta["content"])
+
+                # Tool calls
+                if delta.get("tool_calls"):
+                    for tc in delta["tool_calls"]:
+                        if tc.get("function", {}).get("name"):
+                            yield ToolCallStart(id=tc.get("id", ""), name=tc["function"]["name"])
+                        if tc.get("function", {}).get("arguments"):
+                            yield ToolCallArgs(id=tc.get("id", ""), partial_args=tc["function"]["arguments"])
+```
+
+Tool call completion is detected when the next chunk has no more `tool_calls` or starts text content. The agent loop (not the provider) is responsible for accumulating `ToolCallArgs` into complete arguments and yielding `ToolCallComplete`.
+
+### ClaudeProvider (Anthropic SDK)
+
+```python
+def chat_stream(self, messages, tools=None):
+    with self.client.messages.stream(model=self.model, max_tokens=8192, messages=messages, tools=tools_converted) as stream:
+        for event in stream:
+            if event.type == "content_block_start":
+                if event.content_block.type == "tool_use":
+                    yield ToolCallStart(id=event.content_block.id, name=event.content_block.name)
+            elif event.type == "content_block_delta":
+                if event.delta.type == "text_delta":
+                    yield TextDelta(text=event.delta.text)
+                elif event.delta.type == "input_json_delta":
+                    yield ToolCallArgs(id=..., partial_args=event.delta.partial_json)
+            elif event.type == "message_stop":
+                yield StreamDone()
+```
+
+### OpenAIProvider
+
+```python
+def chat_stream(self, messages, tools=None):
+    stream = self.client.chat.completions.create(model=self.model, messages=messages, tools=tools, stream=True)
+    for chunk in stream:
+        delta = chunk.choices[0].delta
+        if delta.content:
+            yield TextDelta(text=delta.content)
+        if delta.tool_calls:
+            for tc in delta.tool_calls:
+                if tc.function.name:
+                    yield ToolCallStart(id=tc.id, name=tc.function.name)
+                if tc.function.arguments:
+                    yield ToolCallArgs(id=tc.id, partial_args=tc.function.arguments)
+        if chunk.choices[0].finish_reason == "stop":
+            yield StreamDone()
+```
+
+## 4. Agent Loop Streaming
+
+### New `chat_stream()` method
+
+`AgentLoop.chat_stream(user_message)` is a generator that:
+
+1. Appends user message to conversation history
+2. Calls `provider.chat_stream()` and yields events to the caller
+3. When tool calls are detected:
+   - Accumulates `ToolCallArgs` into complete JSON
+   - When complete: yields `ToolCallComplete`, dispatches the tool, yields the result
+   - Calls `provider.chat_stream()` again with the tool result (loops back)
+4. When text is received: yields `TextDelta` directly
+5. Stores the complete response in conversation history
+6. Applies context compression between iterations if needed
+
+```python
+def chat_stream(self, user_message: str) -> Generator[StreamEvent, None, None]:
+    self.messages.append({"role": "user", "content": user_message})
+    tools = self.tool_registry.list_tools() or None
+
+    for iteration in range(self.max_iterations):
+        all_messages = self._build_messages()
+
+        accumulated_text = ""
+        pending_tool_calls = {}  # id -> {name, args_buffer}
+
+        for event in self.provider.chat_stream(all_messages, tools=tools):
+            if isinstance(event, TextDelta):
+                accumulated_text += event.text
+                yield event
+
+            elif isinstance(event, ToolCallStart):
+                pending_tool_calls[event.id] = {"name": event.name, "args": ""}
+                yield event
+
+            elif isinstance(event, ToolCallArgs):
+                if event.id in pending_tool_calls:
+                    pending_tool_calls[event.id]["args"] += event.partial_args
+
+            elif isinstance(event, StreamDone):
+                break
+
+        # If we have tool calls, execute them
+        if pending_tool_calls:
+            # Store assistant message with tool calls
+            tool_calls_msg = [...]
+            self.messages.append({"role": "assistant", "content": accumulated_text or "", "tool_calls": tool_calls_msg})
+
+            for tc_id, tc_data in pending_tool_calls.items():
+                args = json.loads(tc_data["args"]) if tc_data["args"] else {}
+                yield ToolCallComplete(id=tc_id, name=tc_data["name"], arguments=args)
+
+                # Execute tool
+                try:
+                    result = self.tool_registry.dispatch(tc_data["name"], args)
+                except Exception as e:
+                    result = json.dumps({"error": str(e)})
+                if len(result) > 2000:
+                    result = result[:2000] + "\n... [truncated]"
+
+                # Yield tool result for TUI display
+                yield ToolResult(tool_name=tc_data["name"], result=result[:200])
+
+                self.messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
+
+            # Loop back for next LLM call
+            continue
+        else:
+            # Final text response — store and finish
+            self.messages.append({"role": "assistant", "content": accumulated_text})
+            yield StreamDone()
+            return
+
+    # Max iterations: force synthesis
+    yield from self._force_final_synthesis_stream()
+```
+
+Note: Add a `ToolResult` event type for the TUI to display tool results:
+
+```python
+@dataclass
+class ToolResult(StreamEvent):
+    """Result from an executed tool call."""
+    tool_name: str
+    result: str  # Preview (first 200 chars)
+```
+
+### Backward compatibility
+
+`chat()` (non-streaming) is refactored to consume `chat_stream()`:
+
+```python
+def chat(self, user_message: str) -> str:
+    full_text = ""
+    for event in self.chat_stream(user_message):
+        if isinstance(event, TextDelta):
+            full_text += event.text
+    return full_text
+```
+
+## 5. TUI Streaming Renderer
+
+### New file: `genomix/tui_renderer.py`
+
+```python
+class StreamingRenderer:
+    """Renders streaming events to the terminal paragraph-by-paragraph."""
+
+    def __init__(self, console: Console):
+        self.console = console
+        self._buffer = ""          # Current paragraph being streamed
+        self._finalized = []       # Completed paragraphs (already rendered as Markdown)
+
+    def handle_event(self, event: StreamEvent):
+        if isinstance(event, TextDelta):
+            self._buffer += event.text
+            # Print raw character
+            self.console.print(event.text, end="", highlight=False)
+
+            # Check for paragraph boundary (double newline)
+            if "\n\n" in self._buffer:
+                parts = self._buffer.split("\n\n", 1)
+                completed = parts[0]
+                self._buffer = parts[1] if len(parts) > 1 else ""
+
+                # Erase raw text of completed paragraph, re-render as Markdown
+                self._rerender_paragraph(completed)
+
+        elif isinstance(event, ToolCallStart):
+            self._flush_buffer()
+            self.console.print(f"  [dim #00d787]⚡ {event.name}[/]", end="")
+
+        elif isinstance(event, ToolCallComplete):
+            args_str = ", ".join(f"{k}={v!r}" for k, v in list(event.arguments.items())[:3])
+            if len(args_str) > 50:
+                args_str = args_str[:47] + "..."
+            self.console.print(f"([dim]{args_str}[/])")
+
+        elif isinstance(event, ToolResult):
+            preview = event.result.replace("\n", " ")[:80]
+            self.console.print(f"  [dim]  ↳ {preview}[/]")
+
+        elif isinstance(event, StreamDone):
+            self._flush_buffer()
+            self.console.print()  # Final newline
+
+    def _flush_buffer(self):
+        """Render remaining buffer as Markdown."""
+        if self._buffer.strip():
+            # Move cursor up to erase raw text, re-render as Markdown
+            self._rerender_paragraph(self._buffer)
+            self._buffer = ""
+
+    def _rerender_paragraph(self, text):
+        """Replace raw text with Markdown-rendered version."""
+        # For simplicity: just print Markdown after the raw text
+        # The raw text is already printed; we append the formatted version
+        # In practice, we use ANSI escape codes or Rich Live to overwrite
+        pass  # Implementation detail — see plan
+```
+
+### TUI integration
+
+In `GenomixTUI._run_agent()`, replace:
+
+```python
+# OLD: spinner + full response
+with self.console.status("🧬 Analyzing..."):
+    response = loop.chat(message)
+self.console.print(Markdown(response))
+
+# NEW: streaming renderer
+renderer = StreamingRenderer(self.console)
+self.console.print()  # blank line before response
+for event in loop.chat_stream(message):
+    renderer.handle_event(event)
+```
+
+## 6. Edge Cases
+
+| Case | Behavior |
+|------|----------|
+| Provider doesn't support streaming | Fallback: `chat()` + fake stream (yield full text as one TextDelta) |
+| Network error mid-stream | Catch exception, yield what we have, print error |
+| Tool call fails | Yield ToolResult with error message, continue loop |
+| Empty response | Yield TextDelta("No response generated.") |
+| Max iterations reached | Call `_force_final_synthesis_stream()` which streams the forced response |
+| Context compression needed | Compress before each provider call (same as current) |
+| Non-interactive mode (`genomix ask`) | Uses `chat()` which accumulates from `chat_stream()` internally |
+
+## 7. Files Changed
+
+| File | Action | What changes |
+|------|--------|-------------|
+| `genomix/providers/base.py` | Modify | Add StreamEvent dataclasses, `chat_stream()` abstract method |
+| `genomix/providers/opencode.py` | Modify | Implement `chat_stream()` with httpx SSE |
+| `genomix/providers/claude.py` | Modify | Implement `chat_stream()` with Anthropic SDK |
+| `genomix/providers/openai_provider.py` | Modify | Implement `chat_stream()` with OpenAI SDK |
+| `genomix/agent/loop.py` | Modify | Add `chat_stream()` generator, refactor `chat()` to use it |
+| `genomix/tui.py` | Modify | Replace spinner with StreamingRenderer |
+| `genomix/tui_renderer.py` | Create | StreamingRenderer class |
+| `tests/unit/test_streaming.py` | Create | Tests for events, mock streaming, renderer |
+
+## 8. Testing Strategy
+
+- **Unit tests for StreamEvent types**: construction, equality
+- **Mock streaming provider**: yields canned events, verify agent loop handles them correctly
+- **Tool call accumulation**: verify partial ToolCallArgs are assembled into complete ToolCallComplete
+- **Renderer paragraph detection**: verify double-newline triggers re-render
+- **Backward compatibility**: verify `chat()` still works and returns same results
+- **Integration**: mock provider that yields text + tool calls + text, verify full flow
