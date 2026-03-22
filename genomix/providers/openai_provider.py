@@ -29,5 +29,8 @@ class OpenAIProvider(BaseProvider):
                 ))
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
+    def chat_stream(self, messages, tools=None):
+        raise NotImplementedError
+
     def supports_tool_calling(self): return True
     def max_context_length(self): return MODEL_CONTEXT.get(self.model, 128_000)

@@ -59,6 +59,9 @@ class OpenCodeProvider(BaseProvider):
             tool_calls.append(ToolCall(id=tc.get("id", ""), name=tc["function"]["name"], arguments=args))
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
+    def chat_stream(self, messages, tools=None):
+        raise NotImplementedError
+
     def supports_tool_calling(self): return True
     def max_context_length(self): return 16_000  # Conservative to trigger compression early
 

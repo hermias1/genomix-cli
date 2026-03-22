@@ -26,6 +26,9 @@ class ClaudeProvider(BaseProvider):
         content = "\n".join(part for part in text_parts if part) or None
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
+    def chat_stream(self, messages, tools=None):
+        raise NotImplementedError
+
     def supports_tool_calling(self) -> bool:
         return True
 
