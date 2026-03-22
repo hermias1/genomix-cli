@@ -27,7 +27,8 @@ def test_genomix_version():
         capture_output=True, text=True,
     )
     assert result.returncode == 0
-    assert "0.1.0" in result.stdout
+    from genomix import __version__
+    assert __version__ in result.stdout
 
 
 from unittest.mock import patch, MagicMock
