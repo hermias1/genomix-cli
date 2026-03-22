@@ -11,11 +11,7 @@ from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.spinner import Spinner
-from rich.text import Text
 from rich.table import Table
 from rich.rule import Rule
 
@@ -260,7 +256,9 @@ class GenomixTUI:
         self.console.print("  [dim]Or just type a question in natural language.[/]\n")
 
     def _run_agent(self, message: str, skill_path: str | None = None):
-        """Run the agent and display response with spinner."""
+        """Run the agent and display response with streaming renderer."""
+        from genomix.tui_renderer import StreamingRenderer
+
         try:
             from genomix.runtime import iteration_budget_for
 
@@ -273,19 +271,10 @@ class GenomixTUI:
                 loop = self.agent_loop
                 loop.max_iterations = max_iterations
 
-            # Show spinner while agent thinks
-            with self.console.status(
-                "[dim #00d787]🧬 Analyzing...[/]",
-                spinner="dots",
-                spinner_style="#00d787",
-            ):
-                start_index = len(loop.messages)
-                response = loop.chat(message)
-
-            # Render response as markdown
-            self.console.print()
-            self.console.print(Markdown(response))
-            self.console.print()
+            renderer = StreamingRenderer(self.console)
+            start_index = len(loop.messages)
+            for event in loop.chat_stream(message):
+                renderer.handle_event(event)
 
             if self.project:
                 from genomix.agent.session_store import SessionStore
