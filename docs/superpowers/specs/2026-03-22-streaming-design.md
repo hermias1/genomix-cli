@@ -87,9 +87,12 @@ class BaseProvider(ABC):
 
 ```python
 def chat_stream(self, messages, tools=None):
+    clean_messages = self._clean_messages(messages)  # ensure content is str, not None
     payload = {"model": self.model, "messages": clean_messages, "stream": True}
     if tools:
         payload["tools"] = tools
+    current_tool_ids = {}  # index -> id (Ollama only sends id on first chunk per tool)
+
     with httpx.Client(timeout=300) as client:
         with client.stream("POST", f"{self.endpoint}/v1/chat/completions", json=payload) as resp:
             for line in resp.iter_lines():
@@ -105,13 +108,18 @@ def chat_stream(self, messages, tools=None):
                 if delta.get("content"):
                     yield TextDelta(text=delta["content"])
 
-                # Tool calls
+                # Tool calls (track id by index, same pattern as OpenAI)
                 if delta.get("tool_calls"):
                     for tc in delta["tool_calls"]:
+                        idx = tc.get("index", 0)
+                        if tc.get("id"):
+                            current_tool_ids[idx] = tc["id"]
+                        tc_id = current_tool_ids.get(idx, f"call_{idx}")
                         if tc.get("function", {}).get("name"):
-                            yield ToolCallStart(id=tc.get("id", ""), name=tc["function"]["name"])
+                            yield ToolCallStart(id=tc_id, name=tc["function"]["name"])
                         if tc.get("function", {}).get("arguments"):
-                            yield ToolCallArgs(id=tc.get("id", ""), partial_args=tc["function"]["arguments"])
+                            yield ToolCallArgs(id=tc_id, partial_args=tc["function"]["arguments"])
+    yield StreamDone()  # Safety: stream ended without [DONE] sentinel
 ```
 
 The provider tracks the current tool call id by index. Ollama, like OpenAI, only includes the `id` field on the first chunk of a tool call. The provider must store `current_tool_id` from `ToolCallStart` and reuse it for subsequent `ToolCallArgs` events.
@@ -264,10 +272,10 @@ def _force_final_synthesis_stream(self) -> Generator[StreamEvent, None, None]:
     yield StreamDone()
 ```
 
-Note: Add a `ToolResult` event type for the TUI to display tool results:
+`ToolResult` is defined in Section 2 alongside the other event types. In the agent loop, it is yielded after dispatching each tool:
 
 ```python
-@dataclass
+# (ToolResult is already defined in base.py — see Section 2)
 class ToolResult(StreamEvent):
     """Result from an executed tool call."""
     tool_name: str
