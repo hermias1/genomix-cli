@@ -22,15 +22,17 @@ class OpenCodeProvider(BaseProvider):
         # Local 30B-class models can legitimately take several minutes on larger prompts.
         return httpx.Timeout(connect=10.0, read=self.timeout_seconds, write=self.timeout_seconds, pool=10.0)
 
-    def chat(self, messages, tools=None):
-        # Clean messages: ensure content is always a string (Ollama requires it)
-        clean_messages = []
+    def _clean_messages(self, messages):
+        clean = []
         for m in messages:
             msg = {k: v for k, v in m.items() if k in ("role", "content", "tool_call_id", "tool_calls")}
             if msg.get("content") is None:
                 msg["content"] = ""
-            clean_messages.append(msg)
+            clean.append(msg)
+        return clean
 
+    def chat(self, messages, tools=None):
+        clean_messages = self._clean_messages(messages)
         payload = {"model": self.model, "messages": clean_messages, "stream": False}
         if tools:
             payload["tools"] = tools
@@ -60,7 +62,35 @@ class OpenCodeProvider(BaseProvider):
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
     def chat_stream(self, messages, tools=None):
-        raise NotImplementedError
+        from genomix.providers.base import TextDelta, ToolCallStart, ToolCallArgs, StreamDone
+        clean_messages = self._clean_messages(messages)
+        payload = {"model": self.model, "messages": clean_messages, "stream": True}
+        if tools:
+            payload["tools"] = tools
+        current_tool_ids = {}
+        with httpx.Client(timeout=300) as client:
+            with client.stream("POST", f"{self.endpoint}/v1/chat/completions", json=payload) as resp:
+                for line in resp.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    if line == "data: [DONE]":
+                        yield StreamDone()
+                        return
+                    chunk = json.loads(line[6:])
+                    delta = chunk["choices"][0]["delta"]
+                    if delta.get("content"):
+                        yield TextDelta(text=delta["content"])
+                    if delta.get("tool_calls"):
+                        for tc in delta["tool_calls"]:
+                            idx = tc.get("index", 0)
+                            if tc.get("id"):
+                                current_tool_ids[idx] = tc["id"]
+                            tc_id = current_tool_ids.get(idx, f"call_{idx}")
+                            if tc.get("function", {}).get("name"):
+                                yield ToolCallStart(id=tc_id, name=tc["function"]["name"])
+                            if tc.get("function", {}).get("arguments"):
+                                yield ToolCallArgs(id=tc_id, partial_args=tc["function"]["arguments"])
+        yield StreamDone()
 
     def supports_tool_calling(self): return True
     def max_context_length(self): return 16_000  # Conservative to trigger compression early
