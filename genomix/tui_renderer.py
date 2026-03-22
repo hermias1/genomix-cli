@@ -20,8 +20,30 @@ class StreamingRenderer:
         self._buffer = ""
         self._finalized_text = ""
         self._live: Live | None = None
+        self._thinking_live: Live | None = None
+        self._got_first_event = False
+
+    def show_thinking(self) -> None:
+        """Show a thinking indicator before the first event arrives."""
+        from rich.spinner import Spinner
+        self._thinking_live = Live(
+            Spinner("dots", text="[dim #00d787] 🧬 Thinking...[/]", style="#00d787"),
+            console=self.console,
+            refresh_per_second=10,
+        )
+        self._thinking_live.start()
+
+    def _dismiss_thinking(self) -> None:
+        """Remove the thinking indicator on first real event."""
+        if self._thinking_live is not None:
+            self._thinking_live.stop()
+            self._thinking_live = None
 
     def handle_event(self, event: StreamEvent) -> None:
+        if not self._got_first_event:
+            self._got_first_event = True
+            self._dismiss_thinking()
+
         if isinstance(event, TextDelta):
             self._buffer += event.text
             if "\n\n" in self._buffer:

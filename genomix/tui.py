@@ -272,6 +272,7 @@ class GenomixTUI:
                 loop.max_iterations = max_iterations
 
             renderer = StreamingRenderer(self.console)
+            renderer.show_thinking()
             start_index = len(loop.messages)
             for event in loop.chat_stream(message):
                 renderer.handle_event(event)
