@@ -68,7 +68,7 @@ class OpenCodeProvider(BaseProvider):
         if tools:
             payload["tools"] = tools
         current_tool_ids = {}
-        with httpx.Client(timeout=300) as client:
+        with httpx.Client(timeout=httpx.Timeout(600, connect=30)) as client:
             with client.stream("POST", f"{self.endpoint}/v1/chat/completions", json=payload) as resp:
                 for line in resp.iter_lines():
                     if not line.startswith("data: "):

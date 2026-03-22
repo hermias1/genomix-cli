@@ -425,11 +425,21 @@ class GenomixTUI:
         self.console.print(f"\n[bold #00d787]  Generating clinical report for {vcf_path}...[/]\n")
 
         # Use agent with clinical-report skill to analyze
-        loop = self._create_agent_loop(skill_path="reporting/clinical-report")
+        # Use streaming with a spinner so user sees progress
+        from genomix.tui_renderer import StreamingRenderer
+        from genomix.providers.base import TextDelta, StreamDone
+
+        loop = self._create_agent_loop(skill_path="reporting/clinical-report", max_iterations=12)
         prompt = f"Generate a clinical variant report for the file: {vcf_path}. Respond ONLY with the JSON block as specified in your instructions."
 
-        # Collect response (non-streaming for report — need to parse JSON)
-        response = loop.chat(prompt)
+        # Stream with spinner, accumulate full text
+        renderer = StreamingRenderer(self.console)
+        renderer.show_thinking()
+        response = ""
+        for event in loop.chat_stream(prompt):
+            if isinstance(event, TextDelta):
+                response += event.text
+            renderer.handle_event(event)
 
         # Try to parse JSON from response
         try:
