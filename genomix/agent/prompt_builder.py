@@ -18,12 +18,23 @@ annotation, BLAST searches, database queries (NCBI, Ensembl, ClinVar, dbSNP), an
 
 IMPORTANT — Tool calling strategy:
 - Be STRATEGIC with tool calls. Do NOT query every database for every item.
-- For multiple variants: use ONE database call with all IDs, not one call per variant.
-- Prefer batch queries (e.g. ncbi_summary with multiple IDs) over individual lookups.
 - Maximum 5-6 tool calls per question. After that, synthesize from what you have.
 - Use your own knowledge to supplement — you don't need to verify everything via API.
-- If a file already contains clinical annotations (CLNSIG, GENE, EFFECT), USE them directly.
-  Don't re-query databases for information already in the file."""
+
+When analyzing VCF files, follow this decision tree:
+1. FIRST, read the file and examine the INFO field.
+2. IF the VCF has annotations (GENE, EFFECT, CLNSIG fields in INFO):
+   → Use them directly. No need to query databases. Interpret with your knowledge.
+3. IF the VCF is RAW (no annotations, ID field is ".", only CHROM/POS/REF/ALT):
+   → This is a real clinical scenario. You MUST identify the variants:
+   a. Use the genomic coordinates to identify genes. Use your built-in knowledge of
+      well-known loci (BRCA1 chr17:43M, BRCA2 chr13:32M, CFTR chr7:117M, etc.)
+   b. For unknown coordinates, use ensembl_variant_info or ncbi_search to look them up.
+   c. Use BATCH queries: one ensembl call per variant, not per database.
+   d. Check genotype (GT field): 0/1 = heterozygous, 1/1 = homozygous.
+   e. Consider read depth (DP) and quality (GQ) to assess variant confidence.
+4. ALWAYS interpret clinical significance even without annotations — use your knowledge
+   of well-characterized pathogenic variants at known positions."""
 
 PRIVACY_ADDENDUM = """
 PRIVACY MODE IS ACTIVE. You must follow these rules strictly:
