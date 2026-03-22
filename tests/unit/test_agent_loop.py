@@ -49,3 +49,42 @@ def test_max_iterations_guard():
     loop = AgentLoop(provider=provider, tool_registry=registry, max_iterations=3)
     response = loop.chat("Do something")
     assert response  # Should return something, not hang
+
+
+def test_forced_synthesis_on_last_round():
+    provider = MockProvider([
+        ProviderResponse(content=None, tool_calls=[ToolCall(id="c1", name="noop", arguments={})]),
+        ProviderResponse(content=None, tool_calls=[ToolCall(id="c2", name="noop", arguments={})]),
+        ProviderResponse(content="Final synthesis from gathered evidence."),
+    ])
+    registry = ToolRegistry()
+    registry.register(name="noop", description="", parameters={"type": "object", "properties": {}}, handler=lambda args: "ok")
+    loop = AgentLoop(provider=provider, tool_registry=registry, max_iterations=2)
+
+    response = loop.chat("Summarize this")
+
+    assert response == "Final synthesis from gathered evidence."
+    assert provider._call_count == 3
+
+
+def test_forced_synthesis_disables_tools():
+    observed_tools = []
+
+    class RecordingProvider(MockProvider):
+        def chat(self, messages, tools=None):
+            observed_tools.append(tools)
+            return super().chat(messages, tools=tools)
+
+    provider = RecordingProvider([
+        ProviderResponse(content=None, tool_calls=[ToolCall(id="c1", name="noop", arguments={})]),
+        ProviderResponse(content="Synthesis"),
+    ])
+    registry = ToolRegistry()
+    registry.register(name="noop", description="", parameters={"type": "object", "properties": {}}, handler=lambda args: "ok")
+    loop = AgentLoop(provider=provider, tool_registry=registry, max_iterations=1)
+
+    response = loop.chat("Summarize this")
+
+    assert response == "Synthesis"
+    assert observed_tools[0] is not None
+    assert observed_tools[-1] is None

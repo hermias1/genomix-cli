@@ -15,13 +15,15 @@ BREW_PACKAGES = {
 }
 
 
-def check_binary(name):
+def check_binary(name, version_args=None):
     path = shutil.which(name)
     if not path:
         return (name, False, None)
     try:
-        result = subprocess.run([name, "--version"], capture_output=True, text=True, timeout=10)
-        version = result.stdout.strip().split("\n")[0] if result.returncode == 0 else None
+        args = [name] + (version_args or ["--version"])
+        result = subprocess.run(args, capture_output=True, text=True, timeout=10)
+        version_output = result.stdout.strip() or result.stderr.strip()
+        version = version_output.split("\n")[0] if result.returncode == 0 and version_output else None
         return (name, True, version)
     except Exception:
         return (name, True, None)

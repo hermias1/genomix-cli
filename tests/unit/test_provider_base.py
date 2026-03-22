@@ -41,3 +41,9 @@ def test_get_provider_opencode():
     from genomix.providers.opencode import OpenCodeProvider
     provider = get_provider("opencode", endpoint="http://localhost:11434", model="llama3.3:70b")
     assert isinstance(provider, OpenCodeProvider)
+
+
+def test_get_provider_ollama():
+    from genomix.providers.opencode import OpenCodeProvider
+    provider = get_provider("ollama", endpoint="http://localhost:11434", model="qwen3-coder:30b")
+    assert isinstance(provider, OpenCodeProvider)

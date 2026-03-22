@@ -14,8 +14,8 @@ GENOMIX_HOME = Path(os.environ.get("GENOMIX_HOME", Path.home() / ".genomix"))
 
 @dataclass
 class GenomixConfig:
-    provider: str = "claude"
-    model: str = "claude-sonnet-4-6"
+    provider: str = "ollama"
+    model: str = "qwen3-coder:30b"
     max_concurrent_swarm: int = 4
     mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     privacy_mode: bool = False
@@ -24,12 +24,23 @@ class GenomixConfig:
     def from_dict(cls, data: dict[str, Any]) -> GenomixConfig:
         provider_data = data.get("provider", {})
         return cls(
-            provider=provider_data.get("default", "claude"),
-            model=provider_data.get("model", "claude-sonnet-4-6"),
+            provider=provider_data.get("default", "ollama"),
+            model=provider_data.get("model", "qwen3-coder:30b"),
             max_concurrent_swarm=data.get("max_concurrent_swarm", 4),
             mcp_servers=data.get("mcp_servers", {}),
             privacy_mode=data.get("privacy_mode", False),
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "provider": {
+                "default": self.provider,
+                "model": self.model,
+            },
+            "max_concurrent_swarm": self.max_concurrent_swarm,
+            "mcp_servers": self.mcp_servers,
+            "privacy_mode": self.privacy_mode,
+        }
 
 
 def load_config(config_path: Path | None = None) -> GenomixConfig:
@@ -59,3 +70,11 @@ def save_secrets(data, secrets_path=None):
     with open(secrets_path, "w") as f:
         yaml.dump(data, f)
     os.chmod(secrets_path, 0o600)
+
+
+def save_config(config: GenomixConfig, config_path: Path | None = None) -> None:
+    if config_path is None:
+        config_path = GENOMIX_HOME / "config.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, "w") as f:
+        yaml.dump(config.to_dict(), f, sort_keys=False)

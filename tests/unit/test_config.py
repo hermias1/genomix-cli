@@ -9,8 +9,8 @@ from genomix.config import GenomixConfig, load_config, load_secrets, save_secret
 
 def test_default_config():
     config = GenomixConfig()
-    assert config.provider == "claude"
-    assert config.model == "claude-sonnet-4-6"
+    assert config.provider == "ollama"
+    assert config.model == "qwen3-coder:30b"
     assert config.max_concurrent_swarm == 4
 
 
@@ -27,7 +27,7 @@ def test_load_config_from_yaml(tmp_path):
 
 def test_load_config_missing_file():
     config = load_config(config_path=Path("/nonexistent/config.yaml"))
-    assert config.provider == "claude"
+    assert config.provider == "ollama"
 
 
 def test_load_secrets(tmp_path):
@@ -67,3 +67,26 @@ def test_save_secrets_sets_permissions(tmp_path):
     save_secrets({"key": "value"}, secrets_path=path)
     mode = oct(stat.S_IMODE(os.stat(path).st_mode))
     assert mode == "0o600"
+
+
+def test_save_config_round_trip(tmp_path):
+    from genomix.config import save_config
+
+    path = tmp_path / "config.yaml"
+    save_config(
+        GenomixConfig(
+            provider="openai",
+            model="gpt-4o",
+            max_concurrent_swarm=2,
+            mcp_servers={"ncbi": {"enabled": True}},
+            privacy_mode=True,
+        ),
+        config_path=path,
+    )
+
+    loaded = load_config(config_path=path)
+    assert loaded.provider == "openai"
+    assert loaded.model == "gpt-4o"
+    assert loaded.max_concurrent_swarm == 2
+    assert loaded.mcp_servers["ncbi"]["enabled"] is True
+    assert loaded.privacy_mode is True

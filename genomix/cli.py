@@ -5,9 +5,6 @@ import sys
 from pathlib import Path
 
 from genomix import __version__
-
-from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import WordCompleter
 from rich.console import Console
 
 
@@ -56,12 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_agent_loop(skill_path=None):
+def create_agent_loop(skill_path=None, max_iterations=None):
     """Factory: create a fully wired agent loop."""
     from genomix.config import load_config, load_secrets
     from genomix.providers import get_provider
-    from genomix.tools.registry import ToolRegistry
-    from genomix.tools.file_tools import register_file_tools
+    from genomix.runtime import build_tool_registry, get_skill_dirs, is_local_provider
     from genomix.skills.registry import SkillRegistry
     from genomix.project.manager import ProjectManager, ProjectNotFoundError
     from genomix.agent.prompt_builder import build_system_prompt
@@ -72,8 +68,7 @@ def create_agent_loop(skill_path=None):
     api_key = secrets.get(f"{config.provider}_api_key", secrets.get("anthropic_api_key", ""))
     provider = get_provider(config.provider, api_key=api_key, model=config.model)
 
-    registry = ToolRegistry()
-    register_file_tools(registry)
+    registry, _ = build_tool_registry(auto_connect_mcp=True)
 
     project = None
     try:
@@ -83,21 +78,33 @@ def create_agent_loop(skill_path=None):
 
     skill_body = None
     if skill_path:
-        skills_dirs = [Path(__file__).parent.parent / "skills"]
+        skills_dirs = get_skill_dirs()
         skill_registry = SkillRegistry(skills_dirs)
         skill = skill_registry.get_skill_by_path(skill_path)
         if skill:
             skill_body = skill.body
 
-    privacy = config.privacy_mode or config.provider == "opencode"
+    privacy = config.privacy_mode or is_local_provider(config.provider)
     system_prompt = build_system_prompt(project=project, skill_body=skill_body, privacy_mode=privacy)
-    return AgentLoop(provider=provider, tool_registry=registry, system_prompt=system_prompt)
+    return AgentLoop(
+        provider=provider,
+        tool_registry=registry,
+        system_prompt=system_prompt,
+        max_iterations=max_iterations or 30,
+    )
 
 
-def handle_run(slash_command, args, output_format="text"):
+def handle_run(slash_command, args, output_format="text", output_override=None):
+    from genomix.runtime import iteration_budget_for
+
     skill_path = COMMAND_SKILL_MAP.get(slash_command)
-    loop = create_agent_loop(skill_path=skill_path)
     message = f"{slash_command} {' '.join(args)}".strip()
+    if output_override:
+        message = f"{message}\nUse this exact output path: {output_override}"
+    loop = create_agent_loop(
+        skill_path=skill_path,
+        max_iterations=iteration_budget_for(message, skill_path=skill_path),
+    )
     result = loop.chat(message)
     if output_format == "json":
         import json
@@ -106,7 +113,9 @@ def handle_run(slash_command, args, output_format="text"):
 
 
 def handle_ask(question):
-    loop = create_agent_loop()
+    from genomix.runtime import iteration_budget_for
+
+    loop = create_agent_loop(max_iterations=iteration_budget_for(question))
     return loop.chat(question)
 
 
@@ -122,6 +131,32 @@ def handle_init(path=None):
     pm = ProjectManager(Path(path) if path else Path.cwd())
     project = pm.init(name=name, organism=organism, reference_genome=ref, data_type=dtype)
     console.print(f"\n[green]✓[/green] Project initialized: {project.name}")
+
+
+def handle_setup() -> None:
+    """Show dependency status and persist default configuration."""
+    from genomix.config import GenomixConfig, load_config, save_config
+    from genomix.project.setup_wizard import REQUIRED_BINARIES, check_binary, detect_os
+
+    console = Console()
+    config = load_config()
+    if not config.provider:
+        config = GenomixConfig()
+        save_config(config)
+
+    console.print("[bold]Genomix Setup[/bold]\n")
+    console.print(f"OS: [cyan]{detect_os()}[/cyan]")
+    console.print(f"Default provider: [cyan]{config.provider}[/cyan]")
+    console.print(f"Default model: [cyan]{config.model}[/cyan]\n")
+
+    for binary, version_command in REQUIRED_BINARIES:
+        version_args = version_command.split()[1:]
+        name, found, version = check_binary(binary, version_args=version_args)
+        status = "[green]found[/green]" if found else "[yellow]missing[/yellow]"
+        suffix = f" [dim]{version}[/dim]" if version else ""
+        console.print(f"- {name}: {status}{suffix}")
+
+    console.print("\n[dim]Install missing binaries and ensure Ollama is running if you use the default local provider.[/dim]")
 
 
 def handle_interactive():
@@ -141,10 +176,10 @@ def main(argv: list[str] | None = None) -> int:
         handle_init()
         return 0
     if args.command == "setup":
-        print("Setup wizard not yet implemented.")
+        handle_setup()
         return 0
     if args.command == "run":
-        print(handle_run(args.slash_command, args.args or [], args.format))
+        print(handle_run(args.slash_command, args.args or [], args.format, args.output))
         return 0
     if args.command == "ask":
         question = " ".join(args.question) if args.question else sys.stdin.read().strip()

@@ -8,6 +8,7 @@ from typing import Any
 class SessionStore:
     def __init__(self, db_path):
         self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _init_db(self):

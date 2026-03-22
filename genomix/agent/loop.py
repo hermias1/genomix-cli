@@ -41,6 +41,21 @@ class AgentLoop:
             return [{"role": "system", "content": self.system_prompt}] + msgs
         return msgs
 
+    def _force_final_synthesis(self) -> str:
+        """Ask the model for a final answer with tool use disabled."""
+        self.messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "You have enough information. Do not call any more tools. "
+                    "Provide the best final answer now, clearly noting uncertainty where needed."
+                ),
+            }
+        )
+        response = self.provider.chat(self._build_messages(), tools=None)
+        self.messages.append({"role": "assistant", "content": response.content})
+        return response.content or "Max iterations reached without a final response."
+
     def chat(self, user_message: str) -> str:
         self.messages.append({"role": "user", "content": user_message})
         tools = self.tool_registry.list_tools() or None
@@ -75,4 +90,4 @@ class AgentLoop:
                 self.messages.append({"role": "assistant", "content": response.content})
                 return response.content or ""
 
-        return "Max iterations reached without a final response."
+        return self._force_final_synthesis()

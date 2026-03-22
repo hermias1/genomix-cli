@@ -32,7 +32,10 @@ dependencies = [
 genomix = "genomix.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["genomix"]
+packages = ["genomix", "mcp_servers"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills" = "genomix/builtin_skills"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

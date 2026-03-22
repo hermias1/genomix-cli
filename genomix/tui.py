@@ -136,7 +136,7 @@ class GenomixTUI:
             else:
                 self.console.print(f" [red]✗[/] [dim]{server.error[:60]}[/]")
 
-    def _create_agent_loop(self, skill_path=None):
+    def _create_agent_loop(self, skill_path=None, max_iterations=None):
         """Create a wired agent loop with UI callbacks."""
         from genomix.config import load_config, load_secrets
         from genomix.providers import get_provider
@@ -169,7 +169,7 @@ class GenomixTUI:
             provider=provider,
             tool_registry=self.tool_registry,
             system_prompt=system_prompt,
-            max_iterations=8,
+            max_iterations=max_iterations or 12,
             on_tool_call=self._on_tool_call,
             on_tool_result=self._on_tool_result,
             on_thinking=self._on_thinking,
@@ -262,12 +262,16 @@ class GenomixTUI:
     def _run_agent(self, message: str, skill_path: str | None = None):
         """Run the agent and display response with spinner."""
         try:
+            from genomix.runtime import iteration_budget_for
+
+            max_iterations = iteration_budget_for(message, skill_path=skill_path)
             if skill_path or self.agent_loop is None:
-                loop = self._create_agent_loop(skill_path=skill_path)
+                loop = self._create_agent_loop(skill_path=skill_path, max_iterations=max_iterations)
                 if not skill_path:
                     self.agent_loop = loop
             else:
                 loop = self.agent_loop
+                loop.max_iterations = max_iterations
 
             # Show spinner while agent thinks
             with self.console.status(
