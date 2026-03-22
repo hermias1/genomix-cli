@@ -43,4 +43,4 @@ class OpenCodeProvider(BaseProvider):
         return ProviderResponse(content=content, tool_calls=tool_calls)
 
     def supports_tool_calling(self): return True
-    def max_context_length(self): return 32_000
+    def max_context_length(self): return 16_000  # Conservative to trigger compression early
