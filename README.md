@@ -11,6 +11,10 @@
 
 **AI-powered CLI for DNA sequence and genome analysis.**
 
+<p align="center">
+  <img src="docs/demo.svg" alt="Genomix CLI Demo" width="800">
+</p>
+
 Genomix is an intelligent command-line tool that helps biologists, bioinformaticians, and researchers analyze genomic data through natural language. Ask questions about your VCF, FASTA, or FASTQ files — the AI reads them, queries real databases (NCBI, Ensembl, ClinVar), and explains results in accessible language.
 
 **Local-first.** Runs with Ollama by default — your genomic data never leaves your machine.
