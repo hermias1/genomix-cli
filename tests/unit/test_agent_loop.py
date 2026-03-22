@@ -14,6 +14,20 @@ class MockProvider(BaseProvider):
         self._call_count += 1
         return resp
 
+    def chat_stream(self, messages, tools=None):
+        from genomix.providers.base import TextDelta, ToolCallStart, ToolCallArgs, StreamDone
+        import json
+        resp = self._responses[self._call_count]
+        self._call_count += 1
+        if resp.tool_calls:
+            for tc in resp.tool_calls:
+                yield ToolCallStart(id=tc.id, name=tc.name)
+                yield ToolCallArgs(id=tc.id, partial_args=json.dumps(tc.arguments))
+        else:
+            if resp.content:
+                yield TextDelta(text=resp.content)
+        yield StreamDone()
+
     def supports_tool_calling(self):
         return True
 
@@ -71,9 +85,9 @@ def test_forced_synthesis_disables_tools():
     observed_tools = []
 
     class RecordingProvider(MockProvider):
-        def chat(self, messages, tools=None):
+        def chat_stream(self, messages, tools=None):
             observed_tools.append(tools)
-            return super().chat(messages, tools=tools)
+            yield from super().chat_stream(messages, tools=tools)
 
     provider = RecordingProvider([
         ProviderResponse(content=None, tool_calls=[ToolCall(id="c1", name="noop", arguments={})]),

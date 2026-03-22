@@ -41,53 +41,99 @@ class AgentLoop:
             return [{"role": "system", "content": self.system_prompt}] + msgs
         return msgs
 
-    def _force_final_synthesis(self) -> str:
-        """Ask the model for a final answer with tool use disabled."""
-        self.messages.append(
-            {
-                "role": "user",
-                "content": (
-                    "You have enough information. Do not call any more tools. "
-                    "Provide the best final answer now, clearly noting uncertainty where needed."
-                ),
-            }
-        )
-        response = self.provider.chat(self._build_messages(), tools=None)
-        self.messages.append({"role": "assistant", "content": response.content})
-        return response.content or "Max iterations reached without a final response."
+    def _force_final_synthesis_stream(self):
+        from genomix.providers.base import TextDelta, StreamDone
+        self.messages.append({
+            "role": "user",
+            "content": "You have enough information. Do not call any more tools. Provide the best final answer now.",
+        })
+        yielded_text = False
+        for event in self.provider.chat_stream(self._build_messages(), tools=None):
+            if isinstance(event, TextDelta):
+                yielded_text = True
+                yield event
+            elif isinstance(event, StreamDone):
+                if not yielded_text:
+                    yield TextDelta(text="Max iterations reached without a final response.")
+                yield event
+                return
+        if not yielded_text:
+            yield TextDelta(text="Max iterations reached without a final response.")
+        yield StreamDone()
 
-    def chat(self, user_message: str) -> str:
+    def chat_stream(self, user_message: str):
+        """Stream events from the agent loop."""
+        from genomix.providers.base import (
+            TextDelta, ToolCallStart, ToolCallArgs, ToolCallComplete,
+            ToolResult, ErrorEvent, StreamDone,
+        )
         self.messages.append({"role": "user", "content": user_message})
         tools = self.tool_registry.list_tools() or None
 
         for iteration in range(self.max_iterations):
             all_messages = self._build_messages()
+            accumulated_text = ""
+            pending_tool_calls = {}  # id -> {name, args}
 
-            if self.on_thinking and iteration == 0:
-                self.on_thinking("Thinking...")
+            for event in self.provider.chat_stream(all_messages, tools=tools):
+                if isinstance(event, TextDelta):
+                    accumulated_text += event.text
+                    yield event
+                elif isinstance(event, ToolCallStart):
+                    pending_tool_calls[event.id] = {"name": event.name, "args": ""}
+                    yield event
+                elif isinstance(event, ToolCallArgs):
+                    if event.id in pending_tool_calls:
+                        pending_tool_calls[event.id]["args"] += event.partial_args
+                elif isinstance(event, StreamDone):
+                    break
 
-            response = self.provider.chat(all_messages, tools=tools)
+            if pending_tool_calls:
+                # Store assistant message with tool calls
+                tool_calls_msg = []
+                for tc_id, tc_data in pending_tool_calls.items():
+                    tool_calls_msg.append({
+                        "id": tc_id, "type": "function",
+                        "function": {
+                            "name": tc_data["name"],
+                            "arguments": tc_data["args"] if isinstance(tc_data["args"], str) else json.dumps(tc_data["args"]),
+                        }
+                    })
+                self.messages.append({"role": "assistant", "content": accumulated_text or "", "tool_calls": tool_calls_msg})
 
-            if response.tool_calls:
-                self.messages.append({"role": "assistant", "content": response.content or "", "tool_calls": [
-                    {"id": tc.id, "type": "function", "function": {"name": tc.name, "arguments": json.dumps(tc.arguments) if isinstance(tc.arguments, dict) else tc.arguments}}
-                    for tc in response.tool_calls
-                ]})
-                for tc in response.tool_calls:
-                    if self.on_tool_call:
-                        self.on_tool_call(tc.name, tc.arguments)
+                for tc_id, tc_data in pending_tool_calls.items():
                     try:
-                        result = self.tool_registry.dispatch(tc.name, tc.arguments)
+                        args = json.loads(tc_data["args"]) if tc_data["args"] else {}
+                    except json.JSONDecodeError:
+                        args = {}
+                    yield ToolCallComplete(id=tc_id, name=tc_data["name"], arguments=args)
+
+                    if self.on_tool_call:
+                        self.on_tool_call(tc_data["name"], args)
+
+                    try:
+                        result = self.tool_registry.dispatch(tc_data["name"], args)
                     except Exception as e:
                         result = json.dumps({"error": str(e)})
-                    # Truncate large tool results to prevent context explosion
                     if len(result) > 2000:
                         result = result[:2000] + "\n... [truncated]"
+                    yield ToolResult(tool_name=tc_data["name"], result=result[:200])
                     if self.on_tool_result:
-                        self.on_tool_result(tc.name, result[:200])
-                    self.messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+                        self.on_tool_result(tc_data["name"], result[:200])
+                    self.messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
+                continue
             else:
-                self.messages.append({"role": "assistant", "content": response.content})
-                return response.content or ""
+                self.messages.append({"role": "assistant", "content": accumulated_text})
+                yield StreamDone()
+                return
 
-        return self._force_final_synthesis()
+        # Max iterations
+        yield from self._force_final_synthesis_stream()
+
+    def chat(self, user_message: str) -> str:
+        from genomix.providers.base import TextDelta
+        full_text = ""
+        for event in self.chat_stream(user_message):
+            if isinstance(event, TextDelta):
+                full_text += event.text
+        return full_text

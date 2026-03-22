@@ -102,3 +102,84 @@ def test_openai_has_chat_stream():
     provider = OpenAIProvider(api_key="test")
     assert hasattr(provider, "chat_stream")
     assert callable(provider.chat_stream)
+
+
+# --- AgentLoop streaming tests ---
+
+from genomix.agent.loop import AgentLoop
+from genomix.providers.base import BaseProvider, ProviderResponse
+from genomix.tools.registry import ToolRegistry
+
+
+class MockStreamProvider(BaseProvider):
+    def __init__(self, event_sequences):
+        self._sequences = list(event_sequences)
+        self._call = 0
+
+    def chat(self, messages, tools=None):
+        return ProviderResponse(content="fallback")
+
+    def chat_stream(self, messages, tools=None):
+        events = self._sequences[self._call]
+        self._call += 1
+        yield from events
+
+    def supports_tool_calling(self):
+        return True
+
+    def max_context_length(self):
+        return 200_000
+
+
+def test_agent_stream_simple_text():
+    provider = MockStreamProvider([[
+        TextDelta(text="Hello "),
+        TextDelta(text="world"),
+        StreamDone(),
+    ]])
+    loop = AgentLoop(provider=provider, tool_registry=ToolRegistry())
+    events = list(loop.chat_stream("hi"))
+    texts = [e for e in events if isinstance(e, TextDelta)]
+    assert len(texts) == 2
+    assert texts[0].text == "Hello "
+    assert any(isinstance(e, StreamDone) for e in events)
+
+
+def test_agent_stream_tool_call():
+    provider = MockStreamProvider([
+        [
+            ToolCallStart(id="c1", name="echo"),
+            ToolCallArgs(id="c1", partial_args='{"text":'),
+            ToolCallArgs(id="c1", partial_args='"hello"}'),
+            StreamDone(),
+        ],
+        [
+            TextDelta(text="echoed: hello"),
+            StreamDone(),
+        ],
+    ])
+    registry = ToolRegistry()
+    registry.register(
+        name="echo", description="Echo",
+        parameters={"type": "object", "properties": {"text": {"type": "string"}}},
+        handler=lambda args: f"echo: {args['text']}",
+    )
+    loop = AgentLoop(provider=provider, tool_registry=registry)
+    events = list(loop.chat_stream("echo hello"))
+    completes = [e for e in events if isinstance(e, ToolCallComplete)]
+    results = [e for e in events if isinstance(e, ToolResult)]
+    texts = [e for e in events if isinstance(e, TextDelta)]
+    assert len(completes) == 1
+    assert completes[0].arguments == {"text": "hello"}
+    assert len(results) == 1
+    assert len(texts) >= 1
+
+
+def test_agent_chat_uses_stream():
+    provider = MockStreamProvider([[
+        TextDelta(text="result"),
+        StreamDone(),
+    ]])
+    loop = AgentLoop(provider=provider, tool_registry=ToolRegistry())
+    result = loop.chat("hi")
+    assert result == "result"
