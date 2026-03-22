@@ -59,5 +59,42 @@ def ensembl_variant_info(species: str, variant_id: str) -> str:
         return json.dumps({"error": str(e)})
 
 
+@mcp.tool()
+def ensembl_population_frequencies(species: str, variant_id: str) -> str:
+    """Get population allele frequencies for a variant (gnomAD/1000 Genomes).
+
+    Returns frequency data across populations: AFR (African), EUR (European),
+    EAS (East Asian), SAS (South Asian), AMR (American). Useful for ancestry inference.
+    variant_id should be an rsID like 'rs334'.
+    """
+    params = {"content-type": "application/json", "population_genotypes": "1"}
+    try:
+        result = _ensembl.get(f"variation/{species}/{variant_id}", params)
+        # Extract just the population data to keep it compact
+        if isinstance(result, dict):
+            populations = result.get("populations", [])
+            # Filter to major populations only
+            major_pops = {}
+            for pop in populations[:50]:
+                pop_name = pop.get("population", "")
+                if any(k in pop_name for k in ["gnomAD", "1000GENOMES"]):
+                    freq = pop.get("frequency")
+                    if freq is not None:
+                        major_pops[pop_name] = freq
+            summary = {
+                "variant": variant_id,
+                "clinical_significance": result.get("clinical_significance", []),
+                "most_severe_consequence": result.get("most_severe_consequence", ""),
+                "ancestral_allele": result.get("ancestral_allele", ""),
+                "minor_allele": result.get("minor_allele", ""),
+                "maf": result.get("MAF", ""),
+                "population_frequencies": dict(list(major_pops.items())[:20]),
+            }
+            return json.dumps(summary)
+        return _ensembl.compact_json(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 if __name__ == "__main__":
     mcp.run()

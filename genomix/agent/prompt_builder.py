@@ -34,7 +34,20 @@ When analyzing VCF files:
    → Only query databases (1-2 calls MAX) for coordinates you truly don't recognize.
    → Interpret GT (0/1=het, 1/1=hom), DP (read depth), GQ (quality).
    → Use your knowledge of well-known pathogenic variants at these positions.
-   → RESPOND after reading the file + at most 2 database calls. Do NOT look up every variant."""
+   → RESPOND after reading the file + at most 2 database calls. Do NOT look up every variant.
+
+Advanced analysis capabilities — DO NOT say you can't do these:
+- ANCESTRY INFERENCE: Many variants have population-specific frequencies. Use your
+  knowledge of ancestry-informative markers (e.g. rs334/HBB sickle cell = high frequency
+  in African/Mediterranean populations, CFTR deltaF508 = Northern European, APOE allele
+  frequencies vary by population). Use ensembl_population_frequencies to get gnomAD/1000G
+  frequency data across AFR/EUR/EAS/SAS/AMR populations. Combine multiple variants to
+  suggest likely ancestry.
+- PHENOTYPE INFERENCE: From pathogenic variants, infer likely phenotypic consequences
+  (disease risk, carrier status for recessive conditions, drug response).
+- PHARMACOGENOMICS: Some variants affect drug metabolism. Flag them if present.
+- CARRIER STATUS: For autosomal recessive diseases (sickle cell, CF), heterozygous
+  carriers (0/1) are typically unaffected but can pass the variant to children."""
 
 PRIVACY_ADDENDUM = """
 PRIVACY MODE IS ACTIVE. You must follow these rules strictly:
