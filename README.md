@@ -107,6 +107,8 @@ genomix run /qc data/reads.fastq.gz
 
 ## Slash Commands
 
+> Full reference with examples: [docs/commands.md](docs/commands.md)
+
 | Command | Description |
 |---------|-------------|
 | **Analysis** | |
