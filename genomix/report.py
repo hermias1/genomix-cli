@@ -2,11 +2,20 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from html import escape as html_escape
 from pathlib import Path
 from typing import Any
+
+VARIANT_FIELDS = ("gene", "variant", "type", "zygosity", "significance")
+ALLOWED_HTML_TAGS = {
+    "p", "strong", "em", "ul", "ol", "li", "div", "br", "span",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+}
+VOID_HTML_TAGS = {"br"}
+BLOCKED_HTML_TAGS = {"script", "style"}
+ALLOWED_HTML_CLASSES = {"div": {"recommendation"}}
 
 
 def _safe(text: str) -> str:
@@ -14,19 +23,131 @@ def _safe(text: str) -> str:
     return html_escape(str(text), quote=True)
 
 
+class _SafeHTMLSanitizer(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.parts: list[str] = []
+        self._blocked_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in BLOCKED_HTML_TAGS:
+            self._blocked_depth += 1
+            return
+        if self._blocked_depth or tag not in ALLOWED_HTML_TAGS:
+            return
+
+        rendered_attrs = self._render_attrs(tag, attrs)
+        self.parts.append(f"<{tag}{rendered_attrs}>")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in BLOCKED_HTML_TAGS or self._blocked_depth or tag not in ALLOWED_HTML_TAGS:
+            return
+
+        rendered_attrs = self._render_attrs(tag, attrs)
+        if tag in VOID_HTML_TAGS:
+            self.parts.append(f"<{tag}{rendered_attrs}>")
+        else:
+            self.parts.append(f"<{tag}{rendered_attrs}></{tag}>")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in BLOCKED_HTML_TAGS:
+            self._blocked_depth = max(0, self._blocked_depth - 1)
+            return
+        if self._blocked_depth or tag not in ALLOWED_HTML_TAGS or tag in VOID_HTML_TAGS:
+            return
+        self.parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        if not self._blocked_depth:
+            self.parts.append(_safe(data))
+
+    def handle_entityref(self, name: str) -> None:
+        if not self._blocked_depth:
+            self.parts.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        if not self._blocked_depth:
+            self.parts.append(f"&#{name};")
+
+    def handle_comment(self, data: str) -> None:
+        return
+
+    def _render_attrs(self, tag: str, attrs: list[tuple[str, str | None]]) -> str:
+        allowed_classes = ALLOWED_HTML_CLASSES.get(tag, set())
+        if not allowed_classes:
+            return ""
+
+        classes: list[str] = []
+        for name, value in attrs:
+            if name.lower() != "class" or not value:
+                continue
+            classes = [item for item in value.split() if item in allowed_classes]
+            break
+
+        if not classes:
+            return ""
+        return f' class="{_safe(" ".join(classes))}"'
+
+    def get_html(self) -> str:
+        return "".join(self.parts)
+
+
 def _sanitize_html(text: str) -> str:
     """Allow only safe HTML tags in interpretation/recommendation text."""
-    # Remove all tags except allowed ones
-    allowed_tags = r'(?:p|strong|em|ul|ol|li|div|br|span|h[1-6])'
-    cleaned = re.sub(
-        r'<(?!/?' + allowed_tags + r'(?:\s[^>]*)?>)(?!/' + allowed_tags + r'>)[^>]*>',
-        '',
-        text,
-    )
-    # Remove event handlers and javascript
-    cleaned = re.sub(r'\s+on\w+\s*=\s*["\'][^"\']*["\']', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'javascript:', '', cleaned, flags=re.IGNORECASE)
-    return cleaned
+    parser = _SafeHTMLSanitizer()
+    parser.feed(text)
+    parser.close()
+    return parser.get_html()
+
+
+def _normalize_variant_record(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+
+    normalized: dict[str, str] = {}
+    for field in VARIANT_FIELDS:
+        default = "Unknown" if field in {"gene", "significance"} else ""
+        raw = value.get(field, default)
+        if raw is None:
+            raw = default
+        elif isinstance(raw, (dict, list)):
+            raw = json.dumps(raw, ensure_ascii=False)
+        else:
+            raw = str(raw)
+        normalized[field] = raw.strip() or default
+
+    if not (normalized["gene"] != "Unknown" or normalized["variant"]):
+        return None
+    return normalized
+
+
+def extract_variants_from_response(response: str) -> list[dict[str, str]]:
+    """Extract and validate the first JSON array of variant records from model output."""
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(response):
+        if char != "[":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(response[index:])
+        except json.JSONDecodeError:
+            continue
+
+        if not isinstance(payload, list):
+            continue
+
+        variants = [
+            normalized
+            for item in payload
+            if (normalized := _normalize_variant_record(item)) is not None
+        ]
+        if not variants:
+            raise ValueError("JSON array did not contain any valid variant records")
+        return variants
+
+    raise ValueError("No JSON array found in response")
 
 
 REPORT_HTML_TEMPLATE = '''<!DOCTYPE html>
@@ -120,17 +241,18 @@ REPORT_HTML_TEMPLATE = '''<!DOCTYPE html>
 def _significance_badge(sig: str) -> str:
     """Convert significance to styled HTML badge."""
     sig_lower = sig.lower().replace("_", " ").replace("-", " ")
+    safe_sig = _safe(sig)
     if "pathogenic" == sig_lower:
-        return f'<span class="badge badge-pathogenic">{sig}</span>'
+        return f'<span class="badge badge-pathogenic">{safe_sig}</span>'
     elif "likely pathogenic" in sig_lower:
-        return f'<span class="badge badge-likely">{sig}</span>'
+        return f'<span class="badge badge-likely">{safe_sig}</span>'
     elif "vus" in sig_lower or "uncertain" in sig_lower:
-        return f'<span class="badge badge-vus">{sig}</span>'
+        return f'<span class="badge badge-vus">{safe_sig}</span>'
     elif "benign" in sig_lower:
-        return f'<span class="badge badge-benign">{sig}</span>'
+        return f'<span class="badge badge-benign">{safe_sig}</span>'
     elif "risk" in sig_lower:
-        return f'<span class="badge badge-risk">{sig}</span>'
-    return f'<span class="badge">{sig}</span>'
+        return f'<span class="badge badge-risk">{safe_sig}</span>'
+    return f'<span class="badge">{safe_sig}</span>'
 
 
 def generate_report(

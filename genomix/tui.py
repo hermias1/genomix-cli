@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import time
 import threading
 from pathlib import Path
@@ -623,10 +624,9 @@ class GenomixTUI:
 
     def _handle_report(self, args: str):
         """Generate a clinical HTML report from a VCF file."""
-        import json as json_mod
-        from genomix.report import generate_report, save_report
+        from genomix.report import extract_variants_from_response, generate_report, save_report
 
-        parts = args.split()
+        parts = shlex.split(args)
         vcf_path = parts[0]
         output_path = None
         if "--output" in parts:
@@ -664,12 +664,7 @@ class GenomixTUI:
 
         # Try to parse JSON from response
         try:
-            # Find JSON array in response
-            arr_start = response.find("[")
-            arr_end = response.rfind("]") + 1
-            if arr_start == -1:
-                raise ValueError("No JSON array found in response")
-            variants = json_mod.loads(response[arr_start:arr_end])
+            variants = extract_variants_from_response(response)
 
             # Generate interpretation and recommendations from variant data
             interpretation = self._generate_interpretation(variants)
@@ -708,7 +703,7 @@ class GenomixTUI:
                 self.console.print(f"    [{color}]●[/] {v.get('gene', '?')} — {v.get('variant', '')} — {sig}")
             self.console.print()
 
-        except (json_mod.JSONDecodeError, ValueError) as e:
+        except ValueError:
             self.console.print(f"[yellow]  Could not generate structured report. Showing raw analysis:[/]\n")
             from rich.markdown import Markdown
             self.console.print(Markdown(response))

@@ -68,7 +68,7 @@ def create_agent_loop(skill_path=None, max_iterations=None):
     """Factory: create a fully wired agent loop."""
     from genomix.config import load_config, load_secrets
     from genomix.providers import get_provider
-    from genomix.runtime import build_tool_registry, get_skill_dirs, is_local_provider
+    from genomix.runtime import build_tool_registry, get_skill_dirs
     from genomix.skills.registry import SkillRegistry
     from genomix.project.manager import ProjectManager, ProjectNotFoundError
     from genomix.agent.prompt_builder import build_system_prompt
@@ -100,7 +100,7 @@ def create_agent_loop(skill_path=None, max_iterations=None):
         if skill:
             skill_body = skill.body
 
-    privacy = config.privacy_mode or is_local_provider(config.provider)
+    privacy = config.is_local()
     system_prompt = build_system_prompt(project=project, skill_body=skill_body, privacy_mode=privacy)
     return AgentLoop(
         provider=provider,

@@ -1,5 +1,7 @@
 from unittest.mock import patch, MagicMock
-from genomix.cli import handle_run, handle_ask
+from genomix.cli import create_agent_loop, handle_run, handle_ask
+from genomix.config import GenomixConfig
+from genomix.project.manager import ProjectNotFoundError
 
 def test_handle_run_returns_string():
     with patch("genomix.cli.create_agent_loop") as mock:
@@ -36,3 +38,18 @@ def test_handle_run_passes_output_override_in_prompt():
 
         prompt = loop.chat.call_args.args[0]
         assert "/tmp/out.bam" in prompt
+
+
+def test_create_agent_loop_treats_remote_ollama_as_non_local():
+    config = GenomixConfig(provider="ollama", endpoint="https://ollama.example.org")
+
+    with patch("genomix.config.load_config", return_value=config), \
+         patch("genomix.config.load_secrets", return_value={}), \
+         patch("genomix.providers.get_provider", return_value=MagicMock()), \
+         patch("genomix.runtime.build_tool_registry", return_value=(MagicMock(), None)), \
+         patch("genomix.project.manager.ProjectManager.discover", side_effect=ProjectNotFoundError("no project")), \
+         patch("genomix.agent.prompt_builder.build_system_prompt", return_value="system") as build_prompt, \
+         patch("genomix.agent.loop.AgentLoop", return_value=MagicMock()):
+        create_agent_loop()
+
+    assert build_prompt.call_args.kwargs["privacy_mode"] is False

@@ -90,3 +90,17 @@ def test_save_config_round_trip(tmp_path):
     assert loaded.max_concurrent_swarm == 2
     assert loaded.mcp_servers["ncbi"]["enabled"] is True
     assert loaded.privacy_mode is True
+
+
+def test_is_local_true_for_default_ollama():
+    assert GenomixConfig(provider="ollama").is_local() is True
+
+
+def test_is_local_false_for_remote_ollama_endpoint():
+    config = GenomixConfig(provider="ollama", endpoint="https://ollama.example.org")
+    assert config.is_local() is False
+
+
+def test_is_local_true_for_loopback_ollama_endpoint():
+    config = GenomixConfig(provider="ollama", endpoint="http://127.0.0.1:11434")
+    assert config.is_local() is True

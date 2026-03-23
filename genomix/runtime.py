@@ -6,9 +6,6 @@ from pathlib import Path
 
 from genomix.tools.file_tools import register_file_tools
 from genomix.tools.registry import ToolRegistry
-
-
-LOCAL_PROVIDER_NAMES = {"ollama"}
 RESEARCH_SKILLS = {
     "exploration/database-search",
     "exploration/variant-explain",
@@ -31,12 +28,6 @@ RESEARCH_HINTS = {
     "identify",
     "explain",
 }
-
-
-def is_local_provider(name: str) -> bool:
-    return name in LOCAL_PROVIDER_NAMES
-
-
 def get_skill_dirs() -> list[Path]:
     package_root = Path(__file__).resolve().parent
     candidates = [
