@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+from genomix import commands as command_defs
 from genomix.project.setup_wizard import check_binary
 
 
@@ -52,3 +53,8 @@ def test_command_skill_map_has_all_analysis_commands():
 def test_slash_commands_list():
     assert "/help" in SLASH_COMMANDS
     assert "/quit" in SLASH_COMMANDS
+
+
+def test_cli_reuses_shared_command_definitions():
+    assert SLASH_COMMANDS is command_defs.SLASH_COMMANDS
+    assert COMMAND_SKILL_MAP is command_defs.COMMAND_SKILL_MAP

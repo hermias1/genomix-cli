@@ -17,6 +17,12 @@ from rich.table import Table
 from rich.rule import Rule
 
 from genomix import __version__
+from genomix.commands import (
+    COMMAND_DESCRIPTIONS,
+    COMMAND_SECTIONS,
+    COMMAND_SKILL_MAP,
+    SLASH_COMMANDS,
+)
 
 STYLE = Style.from_dict({
     "prompt": "#00d787 bold",
@@ -31,66 +37,6 @@ BANNER = r"""[bold #00d787]
   ╚██████╔╝███████╗██║ ╚████║╚██████╔╝██║ ╚═╝ ██║██║██╔╝ ██╗
    ╚═════╝ ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     ╚═╝╚═╝╚═╝  ╚═╝[/]
 """
-
-SLASH_COMMANDS = [
-    "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
-    "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
-    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains", "/structure",
-    "/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit",
-]
-
-COMMAND_SKILL_MAP = {
-    "/qc": "sequencing/quality-control",
-    "/align": "sequencing/alignment",
-    "/variant-call": "sequencing/variant-calling",
-    "/annotate": "sequencing/annotation",
-    "/pipeline": "sequencing/pipeline",
-    "/blast": "comparative/blast-analysis",
-    "/msa": "comparative/multiple-alignment",
-    "/phylo": "comparative/phylogenetics",
-    "/summary": "exploration/sequence-summary",
-    "/search": "exploration/database-search",
-    "/explain": "exploration/variant-explain",
-    "/report": "reporting/clinical-report",
-    "/lookup": "exploration/variant-lookup",
-    "/drug": "pharmacogenomics/drug-interaction",
-    "/disease": "exploration/disease-association",
-    "/literature": "exploration/literature-search",
-    "/frequency": "exploration/population-frequency",
-    "/cancer": "oncology/cancer-mutations",
-    "/domains": "structural/protein-domains",
-    "/structure": "structural/protein-structure",
-}
-
-COMMAND_DESCRIPTIONS = {
-    "/qc": "Run quality control (FastQC)",
-    "/align": "Align reads to reference genome",
-    "/variant-call": "Call variants (GATK/FreeBayes)",
-    "/annotate": "Annotate variants (SnpEff/VEP)",
-    "/pipeline": "Full pipeline: QC → align → call → annotate",
-    "/blast": "BLAST similarity search",
-    "/msa": "Multiple sequence alignment",
-    "/phylo": "Phylogenetic tree construction",
-    "/summary": "Summarize a genomic file",
-    "/search": "Query databases (NCBI, Ensembl...)",
-    "/explain": "Explain a variant, gene, or region",
-    "/report": "Generate clinical HTML report from VCF",
-    "/lookup": "Comprehensive variant lookup (ClinVar + gnomAD + dbSNP)",
-    "/drug": "Drug-gene interactions (PharmGKB)",
-    "/disease": "Gene-disease associations (OMIM)",
-    "/literature": "Search scientific literature (PubMed)",
-    "/frequency": "Population allele frequencies (gnomAD)",
-    "/cancer": "Somatic cancer mutations (COSMIC)",
-    "/domains": "Protein domain annotations (InterPro)",
-    "/structure": "Protein structure (AlphaFold + PDB)",
-    "/mcp": "Manage MCP servers (connect, status)",
-    "/swarm": "Show background analyses",
-    "/history": "Session history",
-    "/provider": "Switch AI provider",
-    "/model": "Switch model",
-    "/help": "Show available commands",
-    "/quit": "Exit genomix",
-}
 
 
 def _safe_input(prompt: str = "") -> str | None:
@@ -277,17 +223,7 @@ class GenomixTUI:
         table.add_column(style="bold cyan", min_width=18)
         table.add_column(style="dim")
 
-        sections = [
-            ("Analysis", ["/qc", "/align", "/variant-call", "/annotate", "/pipeline"]),
-            ("Comparative", ["/blast", "/msa", "/phylo"]),
-            ("Exploration", ["/summary", "/search", "/explain", "/lookup"]),
-            ("Clinical", ["/report", "/drug", "/disease", "/frequency"]),
-            ("Oncology", ["/cancer"]),
-            ("Literature", ["/literature"]),
-            ("Structural", ["/domains", "/structure"]),
-            ("Session", ["/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit"]),
-        ]
-        for section_name, cmds in sections:
+        for section_name, cmds in COMMAND_SECTIONS:
             table.add_row(f"  [bold dim]{section_name}[/]", "")
             for cmd in cmds:
                 table.add_row(f"    {cmd}", COMMAND_DESCRIPTIONS.get(cmd, ""))

@@ -5,38 +5,8 @@ import sys
 from pathlib import Path
 
 from genomix import __version__
+from genomix.commands import COMMAND_SKILL_MAP, SLASH_COMMANDS
 from rich.console import Console
-
-
-SLASH_COMMANDS = [
-    "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
-    "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
-    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains", "/structure",
-    "/swarm", "/history", "/provider", "/model", "/help", "/quit",
-]
-
-COMMAND_SKILL_MAP = {
-    "/qc": "sequencing/quality-control",
-    "/align": "sequencing/alignment",
-    "/variant-call": "sequencing/variant-calling",
-    "/annotate": "sequencing/annotation",
-    "/pipeline": "sequencing/pipeline",
-    "/blast": "comparative/blast-analysis",
-    "/msa": "comparative/multiple-alignment",
-    "/phylo": "comparative/phylogenetics",
-    "/summary": "exploration/sequence-summary",
-    "/search": "exploration/database-search",
-    "/explain": "exploration/variant-explain",
-    "/report": "reporting/clinical-report",
-    "/lookup": "exploration/variant-lookup",
-    "/drug": "pharmacogenomics/drug-interaction",
-    "/disease": "exploration/disease-association",
-    "/literature": "exploration/literature-search",
-    "/frequency": "exploration/population-frequency",
-    "/cancer": "oncology/cancer-mutations",
-    "/domains": "structural/protein-domains",
-    "/structure": "structural/protein-structure",
-}
 
 
 def build_parser() -> argparse.ArgumentParser:

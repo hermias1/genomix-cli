@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.4.2 — Hardening & Cleanup (2026-03-23)
+
+### Added
+- Live smoke tests for NCBI and Ensembl, opt-in via `GENOMIX_RUN_LIVE_SMOKE=1`
+- Regression tests for privacy mode detection, bounded file previews, and structured report parsing
+
+### Changed
+- Unified slash command definitions across CLI and TUI via a shared command registry
+- Hardened `/report` parsing and HTML sanitization for safer structured report generation
+- Bounded `read_file` previews to avoid loading large genomics files fully into memory
+- Fixed privacy mode detection for remote Ollama endpoints in non-interactive CLI flows
+
+### Removed
+- Dead `mcp_bridge` implementation and its unused unit tests
+
 ## v0.4.0 — Structural Biology Integration (2026-03-23)
 
 ### Added

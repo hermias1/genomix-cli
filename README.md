@@ -37,7 +37,7 @@ Genomix is an intelligent command-line tool that helps biologists, bioinformatic
 
 - **Natural language interface** — ask questions about your genomic data in plain English or French
 - **18 MCP servers** — 5 biotools (samtools, BWA, GATK, BLAST+, FastQC) + 13 databases (see below)
-- **20 slash commands** — `/qc`, `/align`, `/variant-call`, `/blast`, `/msa`, `/explain`, `/report`, `/structure`, and more
+- **27 slash commands** — `/qc`, `/align`, `/variant-call`, `/blast`, `/msa`, `/explain`, `/report`, `/structure`, and more
 - **21 built-in skills** — specialized AI instructions for sequencing, comparative genomics, clinical, oncology, pharmacogenomics, and more
 - **Protein structure analysis** — AlphaFold predictions, AlphaMissense pathogenicity, PDB experimental structures
 - **Streaming responses** — token-by-token display with thinking spinner
@@ -85,7 +85,7 @@ genomix run /qc data/reads.fastq.gz
 ```
    ██████╗ ███████╗███╗   ██╗ ██████╗ ███╗   ███╗██╗██╗  ██╗
   ...
-  v0.4.0 — AI-powered genome analysis
+  v0.4.2 — AI-powered genome analysis
 
   ┌──────────────────────────────────────────────────────┐
   │  Project    BRCA Analysis - Cohort 2026              │
