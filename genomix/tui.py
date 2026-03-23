@@ -34,7 +34,7 @@ BANNER = r"""[bold #00d787]
 SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
     "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
-    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains",
+    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains", "/structure",
     "/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
@@ -57,6 +57,7 @@ COMMAND_SKILL_MAP = {
     "/frequency": "exploration/population-frequency",
     "/cancer": "oncology/cancer-mutations",
     "/domains": "structural/protein-domains",
+    "/structure": "structural/protein-structure",
 }
 
 COMMAND_DESCRIPTIONS = {
@@ -79,6 +80,7 @@ COMMAND_DESCRIPTIONS = {
     "/frequency": "Population allele frequencies (gnomAD)",
     "/cancer": "Somatic cancer mutations (COSMIC)",
     "/domains": "Protein domain annotations (InterPro)",
+    "/structure": "Protein structure (AlphaFold + PDB)",
     "/mcp": "Manage MCP servers (connect, status)",
     "/swarm": "Show background analyses",
     "/history": "Session history",
@@ -264,7 +266,7 @@ class GenomixTUI:
             ("Clinical", ["/report", "/drug", "/disease", "/frequency"]),
             ("Oncology", ["/cancer"]),
             ("Literature", ["/literature"]),
-            ("Structural", ["/domains"]),
+            ("Structural", ["/domains", "/structure"]),
             ("Session", ["/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit"]),
         ]
         for section_name, cmds in sections:

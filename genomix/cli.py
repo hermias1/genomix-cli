@@ -11,7 +11,7 @@ from rich.console import Console
 SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
     "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
-    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains",
+    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains", "/structure",
     "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
@@ -34,6 +34,7 @@ COMMAND_SKILL_MAP = {
     "/frequency": "exploration/population-frequency",
     "/cancer": "oncology/cancer-mutations",
     "/domains": "structural/protein-domains",
+    "/structure": "structural/protein-structure",
 }
 
 

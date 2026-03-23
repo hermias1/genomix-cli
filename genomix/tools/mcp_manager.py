@@ -86,6 +86,15 @@ BUILTIN_SERVERS: list[MCPServerInfo] = [
     MCPServerInfo(name="pubmed", display_name="PubMed", category="databases",
                   description="Biomedical literature search and abstracts",
                   module="mcp_servers.databases.pubmed_server"),
+    MCPServerInfo(name="alphafold", display_name="AlphaFold", category="databases",
+                  description="AI-predicted protein structures and confidence scores",
+                  module="mcp_servers.databases.alphafold_server"),
+    MCPServerInfo(name="uniprot", display_name="UniProt", category="databases",
+                  description="Protein function, domains, GO terms, gene-to-accession",
+                  module="mcp_servers.databases.uniprot_server"),
+    MCPServerInfo(name="pdb", display_name="PDB", category="databases",
+                  description="Experimental protein structures (RCSB)",
+                  module="mcp_servers.databases.pdb_server"),
 ]
 
 
