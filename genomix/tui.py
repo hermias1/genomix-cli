@@ -493,6 +493,16 @@ class GenomixTUI:
 
         # Check API key if needed
         if selected_info["needs_key"]:
+            # Warn about cloud data transfer
+            self.console.print(f"\n  [yellow]⚠ Cloud provider:[/] Your data (file contents, variant info) will be")
+            self.console.print(f"  [yellow]  sent to {selected_info['display']} servers for processing.[/]")
+            self.console.print(f"  [dim]  For sensitive/patient data, use Ollama (option 1) instead.[/]\n")
+
+            confirm = _safe_input("  Continue? (y/N): ")
+            if not confirm or confirm.lower() not in ("y", "yes"):
+                self.console.print("[dim]  Cancelled.[/]\n")
+                return
+
             secrets = load_secrets()
             key_name = selected_info["key_name"]
             if not secrets.get(key_name):
@@ -563,6 +573,11 @@ class GenomixTUI:
             return
 
         info = self.PROVIDERS[name]
+
+        # Warn about cloud data transfer
+        if info["needs_key"]:
+            self.console.print(f"\n  [yellow]⚠ Cloud provider:[/] Data will be sent to {info['display']} servers.")
+            self.console.print(f"  [dim]For sensitive/patient data, use Ollama instead.[/]\n")
 
         # Check API key
         if info["needs_key"]:

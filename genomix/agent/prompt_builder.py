@@ -59,11 +59,8 @@ Advanced analysis capabilities — DO NOT say you can't do these:
   carriers (0/1) are typically unaffected but can pass the variant to children."""
 
 PRIVACY_ADDENDUM = """
-PRIVACY MODE IS ACTIVE. You must follow these rules strictly:
-- Never include raw sequence data (nucleotide strings) in your responses or reasoning
-- Never include patient identifiers or sample metadata
-- Only reference aggregated statistics, variant IDs (rsIDs), and gene symbols
-- All tools run locally — only summaries are passed to you"""
+LOCAL MODE (Ollama) — All data stays on this machine. No data is sent to external servers.
+Tools run locally, and your responses are generated locally. Full privacy guaranteed."""
 
 
 def build_system_prompt(project, skill_body, privacy_mode):

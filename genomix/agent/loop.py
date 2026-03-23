@@ -31,18 +31,6 @@ class AgentLoop:
         self.on_thinking = on_thinking
         self.privacy_mode = privacy_mode
 
-    def _redact_for_privacy(self, text: str) -> str:
-        """Redact raw genomic data from tool results in privacy mode."""
-        import re
-        # Redact long nucleotide sequences (>20 chars of ACGTN)
-        text = re.sub(r'[ACGTNacgtn]{20,}', '[SEQUENCE REDACTED]', text)
-        # Redact quality strings (FASTQ)
-        text = re.sub(r'[!-~]{20,}', '[QUALITY REDACTED]', text)
-        # Truncate overall length
-        if len(text) > 1000:
-            text = text[:1000] + "\n... [truncated for privacy]"
-        return text
-
     def _build_messages(self) -> list[dict[str, Any]]:
         msgs = list(self.messages)
 
@@ -129,8 +117,6 @@ class AgentLoop:
                         result = self.tool_registry.dispatch(tc_data["name"], args)
                     except Exception as e:
                         result = json.dumps({"error": str(e)})
-                    if self.privacy_mode and len(result) > 500:
-                        result = self._redact_for_privacy(result)
                     if len(result) > 2000:
                         result = result[:2000] + "\n... [truncated]"
                     yield ToolResult(tool_name=tc_data["name"], result=result[:200])
