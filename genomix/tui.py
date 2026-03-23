@@ -91,6 +91,15 @@ COMMAND_DESCRIPTIONS = {
 }
 
 
+def _safe_input(prompt: str = "") -> str | None:
+    """Wrapper around input() that returns None on Ctrl+C/EOF."""
+    try:
+        return input(prompt).strip()
+    except (KeyboardInterrupt, EOFError):
+        print()  # newline after ^C
+        return None
+
+
 class GenomixTUI:
     """Immersive terminal chat interface for Genomix."""
 
@@ -470,7 +479,7 @@ class GenomixTUI:
             self.console.print(f"       [dim]{info['description']}[/]")
 
         self.console.print(f"\n  [dim]Current: {current}[/]")
-        choice = input("\n  Enter number (1-3) or press Enter to cancel: ").strip()
+        choice = _safe_input("\n  Enter number (1-3) or press Enter to cancel: ")
 
         if not choice or not choice.isdigit() or int(choice) not in range(1, len(providers) + 1):
             self.console.print("[dim]  Cancelled.[/]\n")
@@ -485,7 +494,7 @@ class GenomixTUI:
             if not secrets.get(key_name):
                 self.console.print(f"\n  [yellow]API key required.[/]")
                 self.console.print(f"  [dim]Get one at: {selected_info['key_url']}[/]\n")
-                api_key = input(f"  Enter your API key: ").strip()
+                api_key = _safe_input("  Enter your API key: ")
                 if not api_key:
                     self.console.print("[dim]  Cancelled.[/]\n")
                     return
@@ -528,7 +537,7 @@ class GenomixTUI:
             marker = "[green]●[/]" if model == current_model else "[dim]○[/]"
             self.console.print(f"    {marker} [{i}] {model}")
 
-        choice = input(f"\n  Enter number (1-{len(info['models'])}) or press Enter to keep current: ").strip()
+        choice = _safe_input(f"\n  Enter number (1-{len(info['models'])}) or press Enter to keep current: ")
 
         if not choice or not choice.isdigit() or int(choice) not in range(1, len(info["models"]) + 1):
             return
@@ -557,7 +566,7 @@ class GenomixTUI:
             if not secrets.get(info["key_name"]):
                 self.console.print(f"\n  [yellow]API key required for {info['display']}.[/]")
                 self.console.print(f"  [dim]Get one at: {info['key_url']}[/]\n")
-                api_key = input(f"  Enter your API key: ").strip()
+                api_key = _safe_input("  Enter your API key: ")
                 if not api_key:
                     self.console.print("[dim]  Cancelled.[/]\n")
                     return

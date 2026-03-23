@@ -133,10 +133,17 @@ def handle_init(path=None):
     """Interactive project initialization."""
     console = Console()
     console.print("[bold]🧬 New Genomix Project[/bold]\n")
-    name = input("Project name: ")
-    organism = input("Organism: ")
-    ref = input("Reference genome: ")
-    dtype = input("Data type: ")
+    try:
+        name = input("Project name: ").strip()
+        organism = input("Organism: ").strip()
+        ref = input("Reference genome: ").strip()
+        dtype = input("Data type: ").strip()
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n[dim]Cancelled.[/dim]")
+        return
+    if not name:
+        console.print("[dim]Cancelled.[/dim]")
+        return
     from genomix.project.manager import ProjectManager
     pm = ProjectManager(Path(path) if path else Path.cwd())
     project = pm.init(name=name, organism=organism, reference_genome=ref, data_type=dtype)
