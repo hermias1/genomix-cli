@@ -65,5 +65,32 @@ def alphafold_confidence(uniprot_id: str) -> str:
         return json.dumps({"error": str(e)})
 
 
+@mcp.tool()
+def alphafold_missense(uniprot_id: str, position: int, alt_aa: str) -> str:
+    """Get AlphaMissense pathogenicity prediction for a specific missense variant.
+    AlphaMissense is Google DeepMind's model for predicting variant pathogenicity.
+    Returns: pathogenicity score (0-1), classification (likely_benign/ambiguous/likely_pathogenic).
+    Example: uniprot_id='P38398', position=1685, alt_aa='T' (BRCA1 R1685T).
+    Note: AlphaMissense data is available as annotations on AlphaFold entries."""
+    try:
+        result = _server.get(f"prediction/{uniprot_id}")
+        if isinstance(result, list) and result:
+            pred = result[0]
+            am_url = pred.get("amAnnotationsUrl", "")
+            return json.dumps({
+                "uniprot_id": uniprot_id,
+                "position": position,
+                "alt_aa": alt_aa,
+                "alphamissense_annotations_url": am_url,
+                "note": "AlphaMissense scores are available in the annotations file. "
+                        "Scores > 0.564 = likely pathogenic, < 0.340 = likely benign.",
+                "gene": pred.get("gene", ""),
+                "global_plddt": pred.get("globalMetricValue", 0),
+            })
+        return json.dumps({"error": "No AlphaFold prediction found"})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 if __name__ == "__main__":
     mcp.run()
