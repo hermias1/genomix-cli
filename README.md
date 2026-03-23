@@ -39,6 +39,9 @@ Genomix is an intelligent command-line tool that helps biologists, bioinformatic
 - **18 MCP servers** — 5 biotools (samtools, BWA, GATK, BLAST+, FastQC) + 13 databases (see below)
 - **20 slash commands** — `/qc`, `/align`, `/variant-call`, `/blast`, `/msa`, `/explain`, `/report`, `/structure`, and more
 - **21 built-in skills** — specialized AI instructions for sequencing, comparative genomics, clinical, oncology, pharmacogenomics, and more
+- **Protein structure analysis** — AlphaFold predictions, AlphaMissense pathogenicity, PDB experimental structures
+- **Streaming responses** — token-by-token display with thinking spinner
+- **Clinical HTML reports** — `/report` generates styled variant reports
 - **Smart analysis** — reads raw VCFs (no annotations needed), identifies genes from coordinates, infers clinical significance
 - **Ancestry inference** — population frequency analysis via gnomAD/1000 Genomes
 - **3 AI providers** — Ollama/local (default), Claude (Anthropic), OpenAI
@@ -82,7 +85,7 @@ genomix run /qc data/reads.fastq.gz
 ```
    ██████╗ ███████╗███╗   ██╗ ██████╗ ███╗   ███╗██╗██╗  ██╗
   ...
-  v0.3.0 — AI-powered genome analysis
+  v0.4.0 — AI-powered genome analysis
 
   ┌──────────────────────────────────────────────────────┐
   │  Project    BRCA Analysis - Cohort 2026              │
@@ -112,6 +115,17 @@ genomix run /qc data/reads.fastq.gz
 | `/variant-call` | Call variants (GATK/FreeBayes) |
 | `/annotate` | Annotate variants (SnpEff/VEP) |
 | `/pipeline` | Full pipeline: QC → align → call → annotate |
+| `/report` | Generate styled HTML clinical report from VCF |
+| **Databases** | |
+| `/lookup` | Look up a gene or variant across databases |
+| `/frequency` | Population allele frequencies (gnomAD) |
+| `/disease` | Disease associations (OMIM) |
+| `/cancer` | Somatic mutation context (COSMIC) |
+| `/drug` | Pharmacogenomics annotations (PharmGKB) |
+| `/literature` | Search biomedical literature (PubMed) |
+| **Structure** | |
+| `/structure` | Protein structure and AlphaFold predictions |
+| `/domains` | Protein domain mapping (InterPro) |
 | **Comparative** | |
 | `/blast` | BLAST similarity search |
 | `/msa` | Multiple sequence alignment |
@@ -144,6 +158,30 @@ genomix run /qc data/reads.fastq.gz
 | **AlphaFold** | Protein structure predictions |
 | **UniProt** | Protein sequences and annotations |
 | **PDB** | Experimental protein structures |
+
+## Protein Structure Analysis
+
+Genomix integrates with Google DeepMind's AlphaFold for structural variant interpretation:
+
+```
+❯ /structure TP53
+
+  ⚡ uniprot_gene_to_accession(gene_name='TP53')
+  ⚡ alphafold_prediction(uniprot_id='P04637')
+  ⚡ pdb_search_gene(gene_name='TP53')
+
+  TP53 (Cellular tumor antigen p53)
+  UniProt: P04637 | AlphaFold pLDDT: 75.06
+  PDB: 172 experimental structures
+
+  Domains: DNA-binding (IPR008923), Tetramerization (IPR003106)
+  Hotspot mutations: R175H, R248W, R273H (DNA-binding domain)
+```
+
+When analyzing missense variants, Genomix automatically checks:
+- **AlphaFold confidence** at the variant position
+- **Protein domain** context (via InterPro)
+- **AlphaMissense** pathogenicity score
 
 ## Architecture
 
