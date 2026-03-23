@@ -6,7 +6,8 @@ CHARS_PER_TOKEN = 4
 
 
 def estimate_tokens(messages):
-    return sum(len(m.get("content", "") or "") for m in messages)
+    total_chars = sum(len(m.get("content", "") or "") for m in messages)
+    return total_chars // CHARS_PER_TOKEN
 
 
 def should_compress(messages, max_tokens):

@@ -43,6 +43,7 @@ COMMAND_SKILL_MAP = {
     "/align": "sequencing/alignment",
     "/variant-call": "sequencing/variant-calling",
     "/annotate": "sequencing/annotation",
+    "/pipeline": "sequencing/pipeline",
     "/blast": "comparative/blast-analysis",
     "/msa": "comparative/multiple-alignment",
     "/phylo": "comparative/phylogenetics",
@@ -173,7 +174,9 @@ class GenomixTUI:
 
         config = load_config()
         secrets = load_secrets()
-        api_key = secrets.get(f"{config.provider}_api_key", secrets.get("anthropic_api_key", ""))
+        KEY_MAP = {"claude": "anthropic_api_key", "openai": "openai_api_key", "opencode": None}
+        key_name = KEY_MAP.get(config.provider)
+        api_key = secrets.get(key_name, "") if key_name else ""
         provider = get_provider(config.provider, api_key=api_key, model=config.model)
 
         skill_body = None
@@ -197,6 +200,7 @@ class GenomixTUI:
             on_tool_call=self._on_tool_call,
             on_tool_result=self._on_tool_result,
             on_thinking=self._on_thinking,
+            privacy_mode=privacy,
         )
 
     def _on_tool_call(self, name: str, args: dict):

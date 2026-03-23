@@ -20,6 +20,7 @@ COMMAND_SKILL_MAP = {
     "/align": "sequencing/alignment",
     "/variant-call": "sequencing/variant-calling",
     "/annotate": "sequencing/annotation",
+    "/pipeline": "sequencing/pipeline",
     "/blast": "comparative/blast-analysis",
     "/msa": "comparative/multiple-alignment",
     "/phylo": "comparative/phylogenetics",
@@ -75,7 +76,9 @@ def create_agent_loop(skill_path=None, max_iterations=None):
 
     config = load_config()
     secrets = load_secrets()
-    api_key = secrets.get(f"{config.provider}_api_key", secrets.get("anthropic_api_key", ""))
+    KEY_MAP = {"claude": "anthropic_api_key", "openai": "openai_api_key", "opencode": None}
+    key_name = KEY_MAP.get(config.provider)
+    api_key = secrets.get(key_name, "") if key_name else ""
     provider = get_provider(config.provider, api_key=api_key, model=config.model)
 
     registry, _ = build_tool_registry(auto_connect_mcp=True)

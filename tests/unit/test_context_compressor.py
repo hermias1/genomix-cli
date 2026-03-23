@@ -6,7 +6,8 @@ def test_should_compress_under_limit():
 
 
 def test_should_compress_over_limit():
-    big = [{"role": "tool", "content": "x" * 100_000}] * 5
+    # 5 * 200_000 chars = 1_000_000 chars → 250_000 tokens > 200_000 * 0.8 = 160_000
+    big = [{"role": "tool", "content": "x" * 200_000}] * 5
     assert should_compress(big, max_tokens=200_000) is True
 
 

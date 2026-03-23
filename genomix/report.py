@@ -2,9 +2,31 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
+from html import escape as html_escape
 from pathlib import Path
 from typing import Any
+
+
+def _safe(text: str) -> str:
+    """Escape HTML to prevent XSS from LLM output."""
+    return html_escape(str(text), quote=True)
+
+
+def _sanitize_html(text: str) -> str:
+    """Allow only safe HTML tags in interpretation/recommendation text."""
+    # Remove all tags except allowed ones
+    allowed_tags = r'(?:p|strong|em|ul|ol|li|div|br|span|h[1-6])'
+    cleaned = re.sub(
+        r'<(?!/?' + allowed_tags + r'(?:\s[^>]*)?>)(?!/' + allowed_tags + r'>)[^>]*>',
+        '',
+        text,
+    )
+    # Remove event handlers and javascript
+    cleaned = re.sub(r'\s+on\w+\s*=\s*["\'][^"\']*["\']', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'javascript:', '', cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 
 REPORT_HTML_TEMPLATE = '''<!DOCTYPE html>
@@ -141,17 +163,20 @@ def generate_report(
     for v in variants:
         sig_badge = _significance_badge(v.get("significance", "Unknown"))
         variant_rows += f"""      <tr>
-        <td class="gene-name">{v.get('gene', 'Unknown')}</td>
-        <td>{v.get('variant', '')}</td>
-        <td>{v.get('type', '')}</td>
-        <td>{v.get('zygosity', '')}</td>
+        <td class="gene-name">{_safe(v.get('gene', 'Unknown'))}</td>
+        <td>{_safe(v.get('variant', ''))}</td>
+        <td>{_safe(v.get('type', ''))}</td>
+        <td>{_safe(v.get('zygosity', ''))}</td>
         <td>{sig_badge}</td>
       </tr>\n"""
 
+    interpretation = _sanitize_html(interpretation)
+    recommendations = _sanitize_html(recommendations)
+
     html = REPORT_HTML_TEMPLATE.format(
-        title=title,
-        filename=filename,
-        reference=reference,
+        title=_safe(title),
+        filename=_safe(filename),
+        reference=_safe(reference),
         total_variants=len(variants),
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         version=__version__,
