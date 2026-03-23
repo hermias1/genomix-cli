@@ -51,12 +51,12 @@ class GenomixConfig:
         """Check if the current provider runs locally (no data sent to cloud)."""
         if self.provider in ("claude", "openai"):
             return False
-        if self.provider == "opencode" and self.endpoint:
+        if self.provider in ("ollama", "opencode") and self.endpoint:
             from urllib.parse import urlparse
             host = urlparse(self.endpoint).hostname or ""
             return host in ("localhost", "127.0.0.1", "0.0.0.0", "::1")
-        # Default opencode with no endpoint = localhost
-        return self.provider == "opencode"
+        # Default ollama with no endpoint = localhost
+        return self.provider in ("ollama", "opencode")
 
 
 def load_config(config_path: Path | None = None) -> GenomixConfig:

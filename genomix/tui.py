@@ -174,10 +174,13 @@ class GenomixTUI:
 
         config = load_config()
         secrets = load_secrets()
-        KEY_MAP = {"claude": "anthropic_api_key", "openai": "openai_api_key", "opencode": None}
+        KEY_MAP = {"claude": "anthropic_api_key", "openai": "openai_api_key", "ollama": None}
         key_name = KEY_MAP.get(config.provider)
         api_key = secrets.get(key_name, "") if key_name else ""
-        provider = get_provider(config.provider, api_key=api_key, model=config.model)
+        provider_kwargs = {"api_key": api_key, "model": config.model}
+        if config.endpoint:
+            provider_kwargs["endpoint"] = config.endpoint
+        provider = get_provider(config.provider, **provider_kwargs)
 
         skill_body = None
         if skill_path:
@@ -442,7 +445,7 @@ class GenomixTUI:
     # ── Provider / Model selectors ──────────────────────────────
 
     PROVIDERS = {
-        "opencode": {
+        "ollama": {
             "display": "Ollama (local)",
             "description": "100% local, no API key, privacy-friendly",
             "models": ["qwen3-coder:30b", "qwen3.5", "llama3.3:70b", "mistral-7b-obliterated"],

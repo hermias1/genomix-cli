@@ -3,14 +3,14 @@ import platform, shutil, subprocess
 
 REQUIRED_BINARIES = [
     ("samtools", "samtools --version"),
-    ("bwa-mem2", "bwa-mem2 version"),
+    ("bwa", "bwa"),  # BWA (bwa-mem2 not in Homebrew, bwa is compatible)
     ("gatk", "gatk --version"),
     ("blastn", "blastn -version"),
     ("fastqc", "fastqc --version"),
 ]
 
 BREW_PACKAGES = {
-    "samtools": "samtools", "bwa-mem2": "bwa-mem2",
+    "samtools": "samtools", "bwa": "bwa",
     "gatk": "brewsci/bio/gatk", "blastn": "blast", "fastqc": "fastqc",
 }
 

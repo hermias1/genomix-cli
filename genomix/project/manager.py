@@ -43,7 +43,7 @@ class ProjectManager:
         for d in ["data/raw", "data/processed", "reports", ".genomix/runtime/swarm", ".genomix/cache", ".genomix/cache/references", ".genomix/cache/databases", ".genomix/skills"]:
             (self.root / d).mkdir(parents=True, exist_ok=True)
         now = datetime.now(timezone.utc).isoformat()
-        manifest = {"schema_version": 1, "name": name, "organism": organism, "reference_genome": reference_genome, "data_type": data_type, "created_at": now, "tools": {"aligner": "bwa-mem2", "variant_caller": "gatk", "annotator": "snpeff"}}
+        manifest = {"schema_version": 1, "name": name, "organism": organism, "reference_genome": reference_genome, "data_type": data_type, "created_at": now, "tools": {"aligner": "bwa", "variant_caller": "gatk", "annotator": "snpeff"}}
         with open(genomix_dir / "project.yaml", "w") as f:
             yaml.dump(manifest, f, default_flow_style=False, sort_keys=False)
         gitignore_path = self.root / ".gitignore"

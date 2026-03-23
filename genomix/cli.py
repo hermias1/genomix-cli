@@ -76,10 +76,13 @@ def create_agent_loop(skill_path=None, max_iterations=None):
 
     config = load_config()
     secrets = load_secrets()
-    KEY_MAP = {"claude": "anthropic_api_key", "openai": "openai_api_key", "opencode": None}
+    KEY_MAP = {"claude": "anthropic_api_key", "openai": "openai_api_key", "ollama": None}
     key_name = KEY_MAP.get(config.provider)
     api_key = secrets.get(key_name, "") if key_name else ""
-    provider = get_provider(config.provider, api_key=api_key, model=config.model)
+    provider_kwargs = {"api_key": api_key, "model": config.model}
+    if config.endpoint:
+        provider_kwargs["endpoint"] = config.endpoint
+    provider = get_provider(config.provider, **provider_kwargs)
 
     registry, _ = build_tool_registry(auto_connect_mcp=True)
 
