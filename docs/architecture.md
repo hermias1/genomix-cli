@@ -11,7 +11,7 @@ The conversation engine. Manages message history, streams responses, handles too
 
 ### Providers (`genomix/providers/`)
 AI backend abstraction. Three implementations:
-- **OpenCode** (Ollama) — local, default, privacy-friendly
+- **Ollama** — local, default, privacy-friendly
 - **Claude** (Anthropic) — best reasoning
 - **OpenAI** — alternative
 
