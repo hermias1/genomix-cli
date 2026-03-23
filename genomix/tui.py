@@ -34,6 +34,7 @@ BANNER = r"""[bold #00d787]
 SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
     "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
+    "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains",
     "/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
@@ -49,6 +50,13 @@ COMMAND_SKILL_MAP = {
     "/search": "exploration/database-search",
     "/explain": "exploration/variant-explain",
     "/report": "reporting/clinical-report",
+    "/lookup": "exploration/variant-lookup",
+    "/drug": "pharmacogenomics/drug-interaction",
+    "/disease": "exploration/disease-association",
+    "/literature": "exploration/literature-search",
+    "/frequency": "exploration/population-frequency",
+    "/cancer": "oncology/cancer-mutations",
+    "/domains": "structural/protein-domains",
 }
 
 COMMAND_DESCRIPTIONS = {
@@ -64,6 +72,13 @@ COMMAND_DESCRIPTIONS = {
     "/search": "Query databases (NCBI, Ensembl...)",
     "/explain": "Explain a variant, gene, or region",
     "/report": "Generate clinical HTML report from VCF",
+    "/lookup": "Comprehensive variant lookup (ClinVar + gnomAD + dbSNP)",
+    "/drug": "Drug-gene interactions (PharmGKB)",
+    "/disease": "Gene-disease associations (OMIM)",
+    "/literature": "Search scientific literature (PubMed)",
+    "/frequency": "Population allele frequencies (gnomAD)",
+    "/cancer": "Somatic cancer mutations (COSMIC)",
+    "/domains": "Protein domain annotations (InterPro)",
     "/mcp": "Manage MCP servers (connect, status)",
     "/swarm": "Show background analyses",
     "/history": "Session history",
@@ -245,8 +260,11 @@ class GenomixTUI:
         sections = [
             ("Analysis", ["/qc", "/align", "/variant-call", "/annotate", "/pipeline"]),
             ("Comparative", ["/blast", "/msa", "/phylo"]),
-            ("Exploration", ["/summary", "/search", "/explain"]),
-            ("Reporting", ["/report"]),
+            ("Exploration", ["/summary", "/search", "/explain", "/lookup"]),
+            ("Clinical", ["/report", "/drug", "/disease", "/frequency"]),
+            ("Oncology", ["/cancer"]),
+            ("Literature", ["/literature"]),
+            ("Structural", ["/domains"]),
             ("Session", ["/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit"]),
         ]
         for section_name, cmds in sections:
