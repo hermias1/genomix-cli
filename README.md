@@ -36,13 +36,13 @@ Genomix is an intelligent command-line tool that helps biologists, bioinformatic
 ## Features
 
 - **Natural language interface** — ask questions about your genomic data in plain English or French
-- **9 MCP servers** — samtools, BWA, GATK, BLAST+, FastQC, NCBI, Ensembl, ClinVar, dbSNP
+- **18 MCP servers** — 5 biotools (samtools, BWA, GATK, BLAST+, FastQC) + 13 databases (see below)
+- **20 slash commands** — `/qc`, `/align`, `/variant-call`, `/blast`, `/msa`, `/explain`, `/report`, `/structure`, and more
+- **21 built-in skills** — specialized AI instructions for sequencing, comparative genomics, clinical, oncology, pharmacogenomics, and more
 - **Smart analysis** — reads raw VCFs (no annotations needed), identifies genes from coordinates, infers clinical significance
 - **Ancestry inference** — population frequency analysis via gnomAD/1000 Genomes
-- **12 built-in skills** — specialized AI instructions for sequencing, comparative genomics, and exploration workflows
 - **3 AI providers** — Ollama/local (default), Claude (Anthropic), OpenAI
 - **Privacy mode** — automatically active with local models, raw sequences never sent to cloud
-- **Slash commands** — `/qc`, `/align`, `/variant-call`, `/blast`, `/msa`, `/explain`, and more
 - **MCP management** — `/mcp` to view, connect, and manage bioinformatics tool servers
 
 ## Installation
@@ -82,7 +82,7 @@ genomix run /qc data/reads.fastq.gz
 ```
    ██████╗ ███████╗███╗   ██╗ ██████╗ ███╗   ███╗██╗██╗  ██╗
   ...
-  v0.1.0 — AI-powered genome analysis
+  v0.3.0 — AI-powered genome analysis
 
   ┌──────────────────────────────────────────────────────┐
   │  Project    BRCA Analysis - Cohort 2026              │
@@ -90,7 +90,7 @@ genomix run /qc data/reads.fastq.gz
   │  Reference  GRCh38                                   │
   │  Provider   opencode (qwen3-coder:30b)               │
   │  Privacy    🔒 ON                                    │
-  │  MCP        9 registered (4 connected, 5 missing)    │
+  │  MCP        18 registered (4 connected, 14 missing)   │
   └──────────────────────────────────────────────────────┘
 
   Connecting MCP servers...
@@ -127,6 +127,24 @@ genomix run /qc data/reads.fastq.gz
 | `/model` | Switch model |
 | `/help` | Show available commands |
 
+## Supported Databases
+
+| Database | Description |
+|----------|-------------|
+| **NCBI** | Gene, nucleotide, and protein search |
+| **Ensembl** | Genome browser, gene annotations, variants |
+| **ClinVar** | Clinical variant interpretations |
+| **dbSNP** | SNP identifiers and allele frequencies |
+| **gnomAD** | Population allele frequencies |
+| **OMIM** | Mendelian disease catalog |
+| **PharmGKB** | Pharmacogenomics annotations |
+| **COSMIC** | Somatic mutations in cancer |
+| **InterPro** | Protein domains and families |
+| **PubMed** | Biomedical literature search |
+| **AlphaFold** | Protein structure predictions |
+| **UniProt** | Protein sequences and annotations |
+| **PDB** | Experimental protein structures |
+
 ## Architecture
 
 ```
@@ -144,8 +162,9 @@ genomix run /qc data/reads.fastq.gz
 │  MCP Servers                                  │
 │  ├── biotools: samtools, BWA, GATK,           │
 │  │   BLAST+, FastQC                           │
-│  └── databases: NCBI, Ensembl,                │
-│      ClinVar, dbSNP                           │
+│  └── databases: NCBI, Ensembl, ClinVar,        │
+│      dbSNP, gnomAD, OMIM, PharmGKB, COSMIC,   │
+│      InterPro, PubMed, AlphaFold, UniProt, PDB │
 │                                               │
 │  AI Providers                                 │
 │  Ollama (local) │ Claude │ OpenAI             │
@@ -175,11 +194,9 @@ openai_api_key: "sk-..."
 
 ## Contributing
 
-Contributions welcome! This project is in early alpha.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, project structure, and how to add new MCP servers, skills, or AI providers.
 
-- **Spec:** `docs/superpowers/specs/2026-03-21-genomix-cli-design.md`
-- **Plan:** `docs/superpowers/plans/2026-03-21-genomix-cli.md`
-- **Skills guide:** Create custom skills in `.genomix/skills/` following the SKILL.md format
+The easiest way to contribute is adding a new database MCP server — each one is a single self-contained file. See the [architecture docs](docs/architecture.md) for an overview of the system.
 
 ## License
 

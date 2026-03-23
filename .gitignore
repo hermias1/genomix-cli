@@ -12,4 +12,7 @@ build/
 .pytest_cache/
 .venv/
 firebase-debug.log
+demo.gif
+demo.tape
+test_project/
 .DS_Store
