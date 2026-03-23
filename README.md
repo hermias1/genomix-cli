@@ -209,26 +209,122 @@ When analyzing missense variants, Genomix automatically checks:
 └───────────────────────────────────────────────┘
 ```
 
-## Configuration
+## AI Providers
 
+Genomix supports 3 AI backends. Switch anytime with `/provider` in the chat.
+
+### Option 1: Ollama (local, default)
+
+Everything stays on your machine. No API key needed. Best for sensitive/patient data.
+
+```bash
+# Install Ollama
+brew install ollama
+
+# Pull a model (pick one)
+ollama pull qwen3-coder:30b    # Best quality, needs 18GB RAM
+ollama pull qwen3.5             # Faster, lighter, 128K context
+ollama pull llama3.3:70b        # Alternative, needs 40GB RAM
+
+# Start Ollama (runs in background)
+ollama serve
+```
+
+Config (`~/.genomix/config.yaml`):
 ```yaml
-# ~/.genomix/config.yaml
 provider:
-  default: opencode        # ollama local (default)
+  default: opencode
   model: qwen3-coder:30b
-
-# Or use Claude/OpenAI:
-# provider:
-#   default: claude
-#   model: claude-sonnet-4-6
 ```
 
-API keys (if using cloud providers):
-```yaml
-# ~/.genomix/secrets.yaml (mode 0600)
-anthropic_api_key: "sk-ant-..."
-openai_api_key: "sk-..."
+No secrets file needed. Privacy mode is automatic.
+
+### Option 2: Claude (Anthropic)
+
+Best reasoning quality. Requires an API key from [console.anthropic.com](https://console.anthropic.com/).
+
+```bash
+# 1. Get your API key at https://console.anthropic.com/settings/keys
+
+# 2. Create config
+cat > ~/.genomix/config.yaml << 'EOF'
+provider:
+  default: claude
+  model: claude-sonnet-4-6
+EOF
+
+# 3. Store your API key (secure file, never committed to git)
+cat > ~/.genomix/secrets.yaml << 'EOF'
+anthropic_api_key: "sk-ant-your-key-here"
+EOF
+chmod 600 ~/.genomix/secrets.yaml
+
+# 4. Launch genomix
+genomix
 ```
+
+Available Claude models:
+| Model | Best for |
+|-------|----------|
+| `claude-sonnet-4-6` | Fast, good quality (recommended) |
+| `claude-opus-4-6` | Best reasoning, slower |
+| `claude-haiku-4-5-20251001` | Fastest, cheapest |
+
+### Option 3: OpenAI
+
+Requires an API key from [platform.openai.com](https://platform.openai.com/api-keys).
+
+```bash
+# 1. Get your API key at https://platform.openai.com/api-keys
+
+# 2. Create config
+cat > ~/.genomix/config.yaml << 'EOF'
+provider:
+  default: openai
+  model: gpt-4o
+EOF
+
+# 3. Store your API key
+cat > ~/.genomix/secrets.yaml << 'EOF'
+openai_api_key: "sk-your-key-here"
+EOF
+chmod 600 ~/.genomix/secrets.yaml
+
+# 4. Launch genomix
+genomix
+```
+
+Available OpenAI models:
+| Model | Best for |
+|-------|----------|
+| `gpt-4o` | Best overall (recommended) |
+| `o3` | Strongest reasoning |
+| `gpt-4-turbo` | Fast, 128K context |
+
+### Switching providers on the fly
+
+Inside a genomix session, switch without restarting:
+
+```
+❯ /provider claude
+  Switched to provider: claude
+
+❯ /model claude-opus-4-6
+  Switched to model: claude-opus-4-6
+
+❯ /provider opencode
+  Switched to provider: opencode
+```
+
+### Privacy considerations
+
+| Provider | Data location | Best for |
+|----------|--------------|----------|
+| **Ollama** (opencode) | 100% local | Patient data, GDPR, confidential |
+| **Claude** | Anthropic servers | Research, best analysis quality |
+| **OpenAI** | OpenAI servers | Alternative cloud option |
+
+With Ollama, raw sequences never leave your machine. With cloud providers, only tool result summaries are sent (not raw genomic data) when privacy mode is active.
 
 ## Contributing
 
