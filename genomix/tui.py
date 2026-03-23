@@ -187,7 +187,7 @@ class GenomixTUI:
             if skill:
                 skill_body = skill.body
 
-        privacy = config.privacy_mode or is_local_provider(config.provider)
+        privacy = config.is_local()
         system_prompt = build_system_prompt(
             project=self.project, skill_body=skill_body, privacy_mode=privacy
         )
@@ -247,7 +247,8 @@ class GenomixTUI:
 
         provider_name = self.config.provider if self.config else "claude"
         model_name = self.config.model if self.config else "?"
-        privacy = "🔒 ON" if (self.config and (self.config.privacy_mode or self.config.provider == "opencode")) else "OFF"
+        is_local = self.config.is_local() if self.config else True
+        privacy = "🔒 Local — data stays on this machine" if is_local else "☁ Cloud — data sent to provider servers"
         status.add_row("  Provider", f"{provider_name} ({model_name})")
         status.add_row("  Privacy", privacy)
 
@@ -478,7 +479,10 @@ class GenomixTUI:
         providers = list(self.PROVIDERS.items())
         for i, (key, info) in enumerate(providers, 1):
             marker = " [green]●[/]" if key == current else " [dim]○[/]"
-            privacy = " [dim]🔒[/]" if not info["needs_key"] else ""
+            if not info["needs_key"]:
+                privacy = " [dim]🔒 local[/]"
+            else:
+                privacy = " [dim]☁ cloud[/]"
             self.console.print(f"  {marker} [{i}] [bold]{info['display']}[/]{privacy}")
             self.console.print(f"       [dim]{info['description']}[/]")
 

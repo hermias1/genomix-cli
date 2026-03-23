@@ -16,6 +16,7 @@ GENOMIX_HOME = Path(os.environ.get("GENOMIX_HOME", Path.home() / ".genomix"))
 class GenomixConfig:
     provider: str = "ollama"
     model: str = "qwen3-coder:30b"
+    endpoint: str = ""  # Custom endpoint (e.g. remote Ollama)
     max_concurrent_swarm: int = 4
     mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     privacy_mode: bool = False
@@ -26,13 +27,14 @@ class GenomixConfig:
         return cls(
             provider=provider_data.get("default", "ollama"),
             model=provider_data.get("model", "qwen3-coder:30b"),
+            endpoint=provider_data.get("endpoint", ""),
             max_concurrent_swarm=data.get("max_concurrent_swarm", 4),
             mcp_servers=data.get("mcp_servers", {}),
             privacy_mode=data.get("privacy_mode", False),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "provider": {
                 "default": self.provider,
                 "model": self.model,
@@ -41,6 +43,20 @@ class GenomixConfig:
             "mcp_servers": self.mcp_servers,
             "privacy_mode": self.privacy_mode,
         }
+        if self.endpoint:
+            d["provider"]["endpoint"] = self.endpoint
+        return d
+
+    def is_local(self) -> bool:
+        """Check if the current provider runs locally (no data sent to cloud)."""
+        if self.provider in ("claude", "openai"):
+            return False
+        if self.provider == "opencode" and self.endpoint:
+            from urllib.parse import urlparse
+            host = urlparse(self.endpoint).hostname or ""
+            return host in ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+        # Default opencode with no endpoint = localhost
+        return self.provider == "opencode"
 
 
 def load_config(config_path: Path | None = None) -> GenomixConfig:
