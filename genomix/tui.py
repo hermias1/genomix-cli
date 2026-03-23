@@ -425,6 +425,167 @@ class GenomixTUI:
                     self.console.print(f"  [bold]{s['id']}[/]  {s['title']}  [dim]{s['created_at']}[/]")
         self.console.print()
 
+    # ── Provider / Model selectors ──────────────────────────────
+
+    PROVIDERS = {
+        "opencode": {
+            "display": "Ollama (local)",
+            "description": "100% local, no API key, privacy-friendly",
+            "models": ["qwen3-coder:30b", "qwen3.5", "llama3.3:70b", "mistral-7b-obliterated"],
+            "needs_key": False,
+            "key_name": None,
+        },
+        "claude": {
+            "display": "Claude (Anthropic)",
+            "description": "Best reasoning quality, cloud-based",
+            "models": ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001"],
+            "needs_key": True,
+            "key_name": "anthropic_api_key",
+            "key_url": "https://console.anthropic.com/settings/keys",
+        },
+        "openai": {
+            "display": "OpenAI",
+            "description": "GPT-4o and o3, cloud-based",
+            "models": ["gpt-4o", "o3", "gpt-4-turbo"],
+            "needs_key": True,
+            "key_name": "openai_api_key",
+            "key_url": "https://platform.openai.com/api-keys",
+        },
+    }
+
+    def _provider_selector(self):
+        """Interactive provider selector."""
+        from genomix.config import load_config, load_secrets, save_config, save_secrets
+
+        self._load_config()
+        current = self.config.provider if self.config else "opencode"
+
+        self.console.print("\n[bold #00d787]  Select AI Provider[/]\n")
+
+        providers = list(self.PROVIDERS.items())
+        for i, (key, info) in enumerate(providers, 1):
+            marker = " [green]●[/]" if key == current else " [dim]○[/]"
+            privacy = " [dim]🔒[/]" if not info["needs_key"] else ""
+            self.console.print(f"  {marker} [{i}] [bold]{info['display']}[/]{privacy}")
+            self.console.print(f"       [dim]{info['description']}[/]")
+
+        self.console.print(f"\n  [dim]Current: {current}[/]")
+        choice = input("\n  Enter number (1-3) or press Enter to cancel: ").strip()
+
+        if not choice or not choice.isdigit() or int(choice) not in range(1, len(providers) + 1):
+            self.console.print("[dim]  Cancelled.[/]\n")
+            return
+
+        selected_key, selected_info = providers[int(choice) - 1]
+
+        # Check API key if needed
+        if selected_info["needs_key"]:
+            secrets = load_secrets()
+            key_name = selected_info["key_name"]
+            if not secrets.get(key_name):
+                self.console.print(f"\n  [yellow]API key required.[/]")
+                self.console.print(f"  [dim]Get one at: {selected_info['key_url']}[/]\n")
+                api_key = input(f"  Enter your API key: ").strip()
+                if not api_key:
+                    self.console.print("[dim]  Cancelled.[/]\n")
+                    return
+                secrets[key_name] = api_key
+                save_secrets(secrets)
+                self.console.print(f"  [green]✓[/] Key saved to ~/.genomix/secrets.yaml\n")
+
+        # Save provider config
+        config = load_config()
+        config.provider = selected_key
+        config.model = selected_info["models"][0]  # Default model
+        save_config(config)
+        self.config = config
+        self.agent_loop = None
+
+        self.console.print(f"  [green]✓[/] Switched to [bold]{selected_info['display']}[/] ({config.model})\n")
+
+        # Offer model selection
+        self._model_selector(provider_key=selected_key)
+
+    def _model_selector(self, provider_key=None):
+        """Interactive model selector for the current provider."""
+        from genomix.config import load_config, save_config
+
+        if provider_key is None:
+            self._load_config()
+            provider_key = self.config.provider if self.config else "opencode"
+
+        info = self.PROVIDERS.get(provider_key)
+        if not info:
+            self.console.print(f"[red]  Unknown provider: {provider_key}[/]\n")
+            return
+
+        config = load_config()
+        current_model = config.model
+
+        self.console.print(f"  [bold #00d787]Select Model[/] ({info['display']})\n")
+
+        for i, model in enumerate(info["models"], 1):
+            marker = "[green]●[/]" if model == current_model else "[dim]○[/]"
+            self.console.print(f"    {marker} [{i}] {model}")
+
+        choice = input(f"\n  Enter number (1-{len(info['models'])}) or press Enter to keep current: ").strip()
+
+        if not choice or not choice.isdigit() or int(choice) not in range(1, len(info["models"]) + 1):
+            return
+
+        new_model = info["models"][int(choice) - 1]
+        config.model = new_model
+        save_config(config)
+        self.config = config
+        self.agent_loop = None
+        self.console.print(f"  [green]✓[/] Model: [bold]{new_model}[/]\n")
+
+    def _switch_provider(self, name: str):
+        """Quick switch provider by name (e.g. /provider claude)."""
+        from genomix.config import load_config, load_secrets, save_config, save_secrets
+
+        if name not in self.PROVIDERS:
+            self.console.print(f"[red]  Unknown provider: {name}[/]")
+            self.console.print(f"  [dim]Available: {', '.join(self.PROVIDERS.keys())}[/]\n")
+            return
+
+        info = self.PROVIDERS[name]
+
+        # Check API key
+        if info["needs_key"]:
+            secrets = load_secrets()
+            if not secrets.get(info["key_name"]):
+                self.console.print(f"\n  [yellow]API key required for {info['display']}.[/]")
+                self.console.print(f"  [dim]Get one at: {info['key_url']}[/]\n")
+                api_key = input(f"  Enter your API key: ").strip()
+                if not api_key:
+                    self.console.print("[dim]  Cancelled.[/]\n")
+                    return
+                secrets[info["key_name"]] = api_key
+                save_secrets(secrets)
+                self.console.print(f"  [green]✓[/] Key saved\n")
+
+        config = load_config()
+        config.provider = name
+        config.model = info["models"][0]
+        save_config(config)
+        self.config = config
+        self.agent_loop = None
+        self.console.print(f"  [green]✓[/] Switched to [bold]{info['display']}[/] ({config.model})\n")
+
+    def _switch_model(self, name: str):
+        """Quick switch model by name (e.g. /model gpt-4o)."""
+        from genomix.config import load_config, save_config
+
+        config = load_config()
+        config.model = name
+        save_config(config)
+        self.config = config
+        self.agent_loop = None
+        self.console.print(f"  [green]✓[/] Model: [bold]{name}[/]\n")
+
+    # ── Report generation ─────────────────────────────────────
+
     def _handle_report(self, args: str):
         """Generate a clinical HTML report from a VCF file."""
         import json as json_mod
@@ -647,35 +808,15 @@ class GenomixTUI:
                 continue
             if cmd == "/provider":
                 if cmd_args:
-                    from genomix.config import load_config, save_config
-                    from genomix.providers import SUPPORTED_PROVIDERS
-
-                    if cmd_args not in SUPPORTED_PROVIDERS:
-                        self.console.print(f"[red]  Unknown provider: {cmd_args}[/]\n")
-                        continue
-                    config = load_config()
-                    config.provider = cmd_args
-                    save_config(config)
-                    self.config = config
-                    self.console.print(f"[#00d787]  Switched to provider: {cmd_args}[/]\n")
-                    self.agent_loop = None
+                    self._switch_provider(cmd_args)
                 else:
-                    self._load_config()
-                    self.console.print(f"  Provider: [bold]{self.config.provider}[/]\n")
+                    self._provider_selector()
                 continue
             if cmd == "/model":
                 if cmd_args:
-                    from genomix.config import load_config, save_config
-
-                    config = load_config()
-                    config.model = cmd_args
-                    save_config(config)
-                    self.config = config
-                    self.console.print(f"[#00d787]  Switched to model: {cmd_args}[/]\n")
-                    self.agent_loop = None
+                    self._switch_model(cmd_args)
                 else:
-                    self._load_config()
-                    self.console.print(f"  Model: [bold]{self.config.model}[/]\n")
+                    self._model_selector()
                 continue
 
             if cmd == "/report":
