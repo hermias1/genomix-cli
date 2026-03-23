@@ -96,5 +96,54 @@ def ensembl_population_frequencies(species: str, variant_id: str) -> str:
         return json.dumps({"error": str(e)})
 
 
+@mcp.tool()
+def ensembl_gene_at_position(chromosome: str, position: int) -> str:
+    """Find what gene(s) are at a specific genomic position (GRCh38).
+
+    This is the key tool for identifying genes from raw VCF coordinates.
+    Works for ANY human gene (~20,000 protein-coding genes).
+    chromosome: '1'-'22', 'X', 'Y' (without 'chr' prefix)
+    position: genomic position (e.g. 7668202)
+
+    Example: chromosome='17', position=7668202 → TP53
+    Example: chromosome='7', position=55142309 → EGFR
+    """
+    # Strip 'chr' prefix if present
+    chrom = chromosome.replace("chr", "")
+    region = f"{chrom}:{position}-{position}"
+    try:
+        result = _ensembl.get(
+            f"overlap/region/human/{region}",
+            {"feature": "gene", "content-type": "application/json"},
+        )
+        if isinstance(result, list):
+            genes = []
+            for gene in result:
+                if gene.get("biotype") == "protein_coding":
+                    genes.append({
+                        "gene_symbol": gene.get("external_name", ""),
+                        "gene_id": gene.get("gene_id", ""),
+                        "biotype": gene.get("biotype", ""),
+                        "description": gene.get("description", ""),
+                        "start": gene.get("start"),
+                        "end": gene.get("end"),
+                        "strand": gene.get("strand"),
+                    })
+            if not genes:
+                # Try all gene types if no protein-coding found
+                for gene in result[:3]:
+                    genes.append({
+                        "gene_symbol": gene.get("external_name", ""),
+                        "gene_id": gene.get("gene_id", ""),
+                        "biotype": gene.get("biotype", ""),
+                    })
+            if not genes:
+                return json.dumps({"info": f"No genes found at {chromosome}:{position}"})
+            return json.dumps({"chromosome": chromosome, "position": position, "genes": genes})
+        return _ensembl.compact_json(result)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 if __name__ == "__main__":
     mcp.run()
