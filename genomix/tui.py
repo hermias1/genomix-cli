@@ -429,8 +429,13 @@ class GenomixTUI:
         from genomix.tui_renderer import StreamingRenderer
         from genomix.providers.base import TextDelta, StreamDone
 
-        loop = self._create_agent_loop(skill_path="reporting/clinical-report", max_iterations=12)
-        prompt = f"Generate a clinical variant report for the file: {vcf_path}. Respond ONLY with the JSON block as specified in your instructions."
+        loop = self._create_agent_loop(skill_path="reporting/clinical-report", max_iterations=6)
+        prompt = (
+            f"Read the file {vcf_path} and list all variants as a JSON array. "
+            f"Respond ONLY with a JSON array like: "
+            f'[{{"gene":"BRCA1","variant":"chr17:43094464 G>A","type":"missense","zygosity":"Heterozygous","significance":"Pathogenic"}},...] '
+            f"Nothing else — just the JSON array."
+        )
 
         # Stream with spinner, accumulate full text
         renderer = StreamingRenderer(self.console)
@@ -443,16 +448,16 @@ class GenomixTUI:
 
         # Try to parse JSON from response
         try:
-            # Find JSON block in response
-            json_start = response.find("{")
-            json_end = response.rfind("}") + 1
-            if json_start == -1:
-                raise ValueError("No JSON found in response")
-            data = json_mod.loads(response[json_start:json_end])
+            # Find JSON array in response
+            arr_start = response.find("[")
+            arr_end = response.rfind("]") + 1
+            if arr_start == -1:
+                raise ValueError("No JSON array found in response")
+            variants = json_mod.loads(response[arr_start:arr_end])
 
-            variants = data.get("variants", [])
-            interpretation = data.get("interpretation", "<p>No interpretation available.</p>")
-            recommendations = data.get("recommendations", "<p>No recommendations available.</p>")
+            # Generate interpretation and recommendations from variant data
+            interpretation = self._generate_interpretation(variants)
+            recommendations = self._generate_recommendations(variants)
 
             # Determine reference from project
             reference = "GRCh38"
@@ -492,6 +497,77 @@ class GenomixTUI:
             from rich.markdown import Markdown
             self.console.print(Markdown(response))
             self.console.print()
+
+    @staticmethod
+    def _generate_interpretation(variants: list[dict]) -> str:
+        """Auto-generate clinical interpretation HTML from variant list."""
+        lines = []
+        pathogenic = [v for v in variants if "pathogenic" in v.get("significance", "").lower()]
+        risk = [v for v in variants if "risk" in v.get("significance", "").lower()]
+
+        if pathogenic:
+            genes = ", ".join(set(v.get("gene", "?") for v in pathogenic))
+            lines.append(f"<p><strong>{len(pathogenic)} pathogenic variant(s)</strong> identified in: {genes}.</p>")
+            for v in pathogenic:
+                gene = v.get("gene", "?")
+                vtype = v.get("type", "variant").replace("_", " ")
+                zyg = v.get("zygosity", "").lower()
+                lines.append(f"<p><strong>{gene}</strong> — {vtype} ({zyg}). "
+                           f"This variant is classified as <strong>{v.get('significance', '?')}</strong> "
+                           f"and may have significant clinical implications.</p>")
+
+        if risk:
+            for v in risk:
+                lines.append(f"<p><strong>{v.get('gene', '?')}</strong> — {v.get('type', 'variant').replace('_', ' ')} "
+                           f"identified as a <strong>risk factor</strong>. "
+                           f"This does not guarantee disease but increases susceptibility.</p>")
+
+        carrier = [v for v in variants if v.get("zygosity", "").lower() == "heterozygous"
+                   and v.get("significance", "").lower() == "pathogenic"
+                   and v.get("gene", "") in ("CFTR", "HBB", "SMN1")]
+        if carrier:
+            genes = ", ".join(v.get("gene", "?") for v in carrier)
+            lines.append(f"<p><strong>Carrier status:</strong> Heterozygous carrier for recessive condition(s) "
+                        f"in {genes}. The individual is likely unaffected but can transmit the variant.</p>")
+
+        return "\n".join(lines) if lines else "<p>No significant clinical findings.</p>"
+
+    @staticmethod
+    def _generate_recommendations(variants: list[dict]) -> str:
+        """Auto-generate clinical recommendations HTML from variant list."""
+        recs = []
+        genes = [v.get("gene", "") for v in variants if "pathogenic" in v.get("significance", "").lower()]
+
+        if any(g in ("BRCA1", "BRCA2") for g in genes):
+            recs.append("<div class='recommendation'><strong>Hereditary Cancer Syndrome:</strong> "
+                       "Pathogenic BRCA1/BRCA2 variants detected. Recommend genetic counseling, "
+                       "enhanced cancer surveillance (mammography, MRI), and evaluation of "
+                       "risk-reducing options. Family members should be offered cascade testing.</div>")
+
+        if "CFTR" in genes:
+            recs.append("<div class='recommendation'><strong>Cystic Fibrosis:</strong> "
+                       "CFTR variant detected. Carrier testing recommended for reproductive partner. "
+                       "Genetic counseling advised for family planning.</div>")
+
+        if "HBB" in genes:
+            recs.append("<div class='recommendation'><strong>Hemoglobinopathy:</strong> "
+                       "HBB variant detected (sickle cell trait). Carrier testing recommended for "
+                       "reproductive partner. Genetic counseling advised.</div>")
+
+        if any(v.get("gene") == "APOE" for v in variants):
+            recs.append("<div class='recommendation'><strong>Alzheimer's Risk:</strong> "
+                       "APOE risk variant identified. This is a susceptibility factor, not diagnostic. "
+                       "No specific clinical action required but may inform personal health planning.</div>")
+
+        if not recs:
+            recs.append("<div class='recommendation'>No specific clinical recommendations based on the "
+                       "identified variants. Standard of care applies.</div>")
+
+        recs.append("<div class='recommendation'><strong>General:</strong> "
+                   "This report is for research/informational purposes. Clinical decisions should "
+                   "involve a qualified genetic counselor or medical geneticist.</div>")
+
+        return "\n".join(recs)
 
     def run(self):
         """Main interactive loop."""
