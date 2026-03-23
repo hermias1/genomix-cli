@@ -25,12 +25,21 @@ When analyzing VCF files:
 1. Read the file. Check if INFO has annotations (GENE, EFFECT, CLNSIG).
 2. IF annotated: use them directly, no database queries needed.
 3. IF raw (no annotations, ID is "."):
-   → Use YOUR KNOWLEDGE FIRST to identify genes from coordinates:
+   → Use YOUR KNOWLEDGE FIRST to identify genes from coordinates.
+     IMPORTANT: Different genes can be on the same chromosome! Check the POSITION carefully.
+     chr17:7,661,000-7,687,000 = TP53 (NOT BRCA1!)
      chr17:43,044,000-43,170,000 = BRCA1
      chr13:32,315,000-32,400,000 = BRCA2
+     chr7:55,019,000-55,211,000 = EGFR
      chr7:117,480,000-117,668,000 = CFTR
+     chr7:140,719,000-140,924,000 = BRAF
+     chr12:25,205,000-25,250,000 = KRAS
+     chr3:36,993,000-37,050,000 = MLH1
      chr11:5,225,000-5,228,000 = HBB
      chr19:44,905,000-44,910,000 = APOE
+     chr10:87,863,000-87,971,000 = PTEN
+     chr1:114,704,000-114,716,000 = NRAS
+     chr2:47,403,000-47,703,000 = MSH2
    → Only query databases (1-2 calls MAX) for coordinates you truly don't recognize.
    → Interpret GT (0/1=het, 1/1=hom), DP (read depth), GQ (quality).
    → Use your knowledge of well-known pathogenic variants at these positions.

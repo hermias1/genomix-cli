@@ -1,10 +1,11 @@
 """Streaming renderer — displays LLM responses progressively with Rich."""
 from __future__ import annotations
 
+import sys
+
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
-from rich.text import Text
 
 from genomix.providers.base import (
     StreamEvent, TextDelta, ToolCallStart, ToolCallComplete,
@@ -13,15 +14,19 @@ from genomix.providers.base import (
 
 
 class StreamingRenderer:
-    """Renders streaming events to terminal, paragraph-by-paragraph."""
+    """Renders streaming events to terminal.
+
+    Strategy: print text character-by-character during streaming (raw),
+    then on StreamDone, clear and re-render as Markdown.
+    Tool calls are printed immediately.
+    """
 
     def __init__(self, console: Console):
         self.console = console
         self._buffer = ""
-        self._finalized_text = ""
-        self._live: Live | None = None
         self._thinking_live: Live | None = None
-        self._got_first_event = False
+        self._got_first_text = False
+        self._raw_lines_count = 0
 
     def show_thinking(self) -> None:
         """Show a thinking indicator before the first event arrives."""
@@ -34,26 +39,23 @@ class StreamingRenderer:
         self._thinking_live.start()
 
     def _dismiss_thinking(self) -> None:
-        """Remove the thinking indicator on first real event."""
         if self._thinking_live is not None:
             self._thinking_live.stop()
             self._thinking_live = None
 
     def handle_event(self, event: StreamEvent) -> None:
-        if not self._got_first_event:
-            self._got_first_event = True
-            self._dismiss_thinking()
-
         if isinstance(event, TextDelta):
+            if not self._got_first_text:
+                self._got_first_text = True
+                self._dismiss_thinking()
+            # Print raw characters as they stream
+            sys.stdout.write(event.text)
+            sys.stdout.flush()
             self._buffer += event.text
-            if "\n\n" in self._buffer:
-                parts = self._buffer.split("\n\n", 1)
-                self._finalized_text += parts[0] + "\n\n"
-                self._buffer = parts[1]
-            self._update_live()
+            self._raw_lines_count += event.text.count("\n")
 
         elif isinstance(event, ToolCallStart):
-            self._stop_live()
+            self._dismiss_thinking()
             self.console.print(f"  [dim #00d787]⚡ {event.name}[/]", end="")
 
         elif isinstance(event, ToolCallComplete):
@@ -67,29 +69,21 @@ class StreamingRenderer:
             self.console.print(f"  [dim]  ↳ {preview}[/]")
 
         elif isinstance(event, ErrorEvent):
-            self._stop_live()
+            self._dismiss_thinking()
             self.console.print(f"\n[red]Error: {event.message}[/]")
 
         elif isinstance(event, StreamDone):
-            self._finalized_text += self._buffer
-            self._buffer = ""
-            self._stop_live()
-            if self._finalized_text.strip():
+            self._dismiss_thinking()
+            if self._buffer.strip():
+                # Move cursor up to erase raw streamed text
+                if self._raw_lines_count > 0:
+                    sys.stdout.write(f"\033[{self._raw_lines_count + 1}A\033[J")
+                    sys.stdout.flush()
+                else:
+                    # Single line — just clear it
+                    sys.stdout.write("\r\033[K")
+                    sys.stdout.flush()
+                # Re-render as formatted Markdown
                 self.console.print()
-                self.console.print(Markdown(self._finalized_text.strip()))
+                self.console.print(Markdown(self._buffer.strip()))
             self.console.print()
-
-    def _update_live(self) -> None:
-        display_text = self._finalized_text + self._buffer
-        if not display_text.strip():
-            return
-        if self._live is None:
-            self._live = Live(Text(display_text), console=self.console, refresh_per_second=10)
-            self._live.start()
-        else:
-            self._live.update(Text(display_text))
-
-    def _stop_live(self) -> None:
-        if self._live is not None:
-            self._live.stop()
-            self._live = None
