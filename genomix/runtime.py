@@ -8,7 +8,7 @@ from genomix.tools.file_tools import register_file_tools
 from genomix.tools.registry import ToolRegistry
 
 
-LOCAL_PROVIDER_NAMES = {"ollama", "opencode"}
+LOCAL_PROVIDER_NAMES = {"ollama"}
 RESEARCH_SKILLS = {
     "exploration/database-search",
     "exploration/variant-explain",

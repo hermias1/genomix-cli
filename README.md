@@ -91,8 +91,8 @@ genomix run /qc data/reads.fastq.gz
   │  Project    BRCA Analysis - Cohort 2026              │
   │  Organism   Homo sapiens                             │
   │  Reference  GRCh38                                   │
-  │  Provider   opencode (qwen3-coder:30b)               │
-  │  Privacy    🔒 ON                                    │
+  │  Provider   ollama (qwen3-coder:30b)                  │
+  │  Privacy    🔒 Local — data stays on this machine    │
   │  MCP        18 registered (4 connected, 14 missing)   │
   └──────────────────────────────────────────────────────┘
 
@@ -235,7 +235,7 @@ ollama serve
 Config (`~/.genomix/config.yaml`):
 ```yaml
 provider:
-  default: opencode
+  default: ollama
   model: qwen3-coder:30b
 ```
 
@@ -314,15 +314,15 @@ Inside a genomix session, switch without restarting:
 ❯ /model claude-opus-4-6
   Switched to model: claude-opus-4-6
 
-❯ /provider opencode
-  Switched to provider: opencode
+❯ /provider ollama
+  Switched to provider: ollama
 ```
 
 ### Privacy considerations
 
 | Provider | Data location | Best for |
 |----------|--------------|----------|
-| **Ollama** (opencode) | 100% local | Patient data, GDPR, confidential |
+| **Ollama** | 100% local | Patient data, GDPR, confidential |
 | **Claude** | Anthropic servers | Research, best analysis quality |
 | **OpenAI** | OpenAI servers | Alternative cloud option |
 

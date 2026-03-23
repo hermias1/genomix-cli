@@ -475,7 +475,7 @@ class GenomixTUI:
         from genomix.config import load_config, load_secrets, save_config, save_secrets
 
         self._load_config()
-        current = self.config.provider if self.config else "opencode"
+        current = self.config.provider if self.config else "ollama"
 
         self.console.print("\n[bold #00d787]  Select AI Provider[/]\n")
 
@@ -542,7 +542,7 @@ class GenomixTUI:
 
         if provider_key is None:
             self._load_config()
-            provider_key = self.config.provider if self.config else "opencode"
+            provider_key = self.config.provider if self.config else "ollama"
 
         info = self.PROVIDERS.get(provider_key)
         if not info:

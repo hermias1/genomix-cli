@@ -261,7 +261,7 @@ Switch AI provider interactively.
 ```
 /provider               # Interactive selector (recommended)
 /provider claude        # Quick switch to Claude
-/provider opencode      # Quick switch to Ollama
+/provider ollama        # Quick switch to Ollama
 /provider openai        # Quick switch to OpenAI
 ```
 

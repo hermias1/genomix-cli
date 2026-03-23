@@ -1,4 +1,6 @@
-"""BWA-MEM2 MCP server for read alignment."""
+"""BWA MCP server for read alignment."""
+import json
+import shutil
 import sys
 import os
 
@@ -8,24 +10,25 @@ from mcp.server.fastmcp import FastMCP
 from mcp_servers.base_biotool import BaseBiotoolServer
 
 mcp = FastMCP("bwa")
-_bwa = BaseBiotoolServer("bwa-mem2")
+
+# Prefer bwa-mem2 if available, fall back to bwa
+_binary = "bwa-mem2" if shutil.which("bwa-mem2") else "bwa"
+_bwa = BaseBiotoolServer(_binary)
 
 
 @mcp.tool()
 def bwa_index(ref: str) -> str:
-    """Index a reference genome with bwa-mem2."""
+    """Index a reference genome for alignment."""
     if not _bwa.check_binary():
-        import json
-        return json.dumps({"error": "bwa-mem2 not found. Run 'genomix setup'."})
+        return json.dumps({"error": f"{_binary} not found. Run 'genomix setup'."})
     return _bwa.run_command(["index", ref])
 
 
 @mcp.tool()
 def bwa_mem(ref: str, read1: str, read2: str = "", threads: int = 4, output_sam: str = "output.sam") -> str:
-    """Align reads to a reference genome using bwa-mem2."""
+    """Align reads to a reference genome using BWA-MEM."""
     if not _bwa.check_binary():
-        import json
-        return json.dumps({"error": "bwa-mem2 not found. Run 'genomix setup'."})
+        return json.dumps({"error": f"{_binary} not found. Run 'genomix setup'."})
     args = ["mem", "-t", str(threads), ref, read1]
     if read2:
         args.append(read2)
