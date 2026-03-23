@@ -25,15 +25,11 @@ When analyzing VCF files:
 1. Read the file. Check if INFO has annotations (GENE, EFFECT, CLNSIG).
 2. IF annotated: use them directly, no database queries needed.
 3. IF raw (no annotations, ID is "."):
-   → For COMMON clinical genes, use your knowledge of coordinates:
-     chr17:7.6M = TP53 | chr17:43M = BRCA1 | chr13:32M = BRCA2
-     chr7:55M = EGFR | chr7:117M = CFTR | chr7:140M = BRAF
-     chr12:25M = KRAS | chr3:37M = MLH1 | chr11:5.2M = HBB
-     chr19:44.9M = APOE | chr10:87M = PTEN | chr2:47M = MSH2
-   → For ANY coordinate you don't recognize: use ensembl_gene_at_position(chromosome, position)
-     This tool works for ALL ~20,000 human protein-coding genes.
-     Example: ensembl_gene_at_position("7", 55142309) → EGFR
-   → You can batch-check unknown coordinates efficiently.
+   → Genomix AUTO-ANNOTATES raw VCFs: each variant line has a [GENE:name] tag appended.
+     Use the gene names from these tags directly — no need to guess from coordinates.
+     Example line: "chr17  7668202  .  T  TC  99  PASS  .  [GENE:TP53]"
+   → If a line has no [GENE:] tag, use ensembl_gene_at_position(chromosome, position).
+   → Focus your analysis on INTERPRETATION, not gene identification.
    → Interpret GT (0/1=het, 1/1=hom), DP (read depth), GQ (quality).
    → Use your knowledge of well-known pathogenic variants at these positions.
    → RESPOND after reading the file + at most 2 database calls. Do NOT look up every variant.
