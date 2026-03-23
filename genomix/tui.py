@@ -112,7 +112,7 @@ class GenomixTUI:
         """Create a wired agent loop with UI callbacks."""
         from genomix.config import load_config, load_secrets
         from genomix.providers import get_provider
-        from genomix.runtime import get_skill_dirs, is_local_provider
+        from genomix.runtime import get_skill_dirs
         from genomix.skills.registry import SkillRegistry
         from genomix.agent.prompt_builder import build_system_prompt
         from genomix.agent.loop import AgentLoop
