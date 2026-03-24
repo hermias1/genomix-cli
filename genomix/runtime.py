@@ -6,6 +6,7 @@ from pathlib import Path
 
 from genomix.tools.file_tools import register_file_tools
 from genomix.tools.registry import ToolRegistry
+from genomix.tools.vcf_tools import register_vcf_tools
 RESEARCH_SKILLS = {
     "exploration/database-search",
     "exploration/variant-explain",
@@ -55,6 +56,7 @@ def iteration_budget_for(message: str, skill_path: str | None = None) -> int:
 def build_tool_registry(auto_connect_mcp: bool = False) -> tuple[ToolRegistry, object | None]:
     registry = ToolRegistry()
     register_file_tools(registry)
+    register_vcf_tools(registry)
 
     if not auto_connect_mcp:
         return registry, None
