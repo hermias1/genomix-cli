@@ -4,6 +4,7 @@ SLASH_COMMANDS = [
     "/qc", "/align", "/variant-call", "/annotate", "/pipeline",
     "/blast", "/msa", "/phylo", "/summary", "/search", "/explain", "/report",
     "/lookup", "/drug", "/disease", "/literature", "/frequency", "/cancer", "/domains", "/structure",
+    "/classify", "/pgx-profile", "/prioritize", "/compare",
     "/mcp", "/swarm", "/history", "/provider", "/model", "/help", "/quit",
 ]
 
@@ -28,6 +29,10 @@ COMMAND_SKILL_MAP = {
     "/cancer": "oncology/cancer-mutations",
     "/domains": "structural/protein-domains",
     "/structure": "structural/protein-structure",
+    "/classify": "clinical/acmg-classify",
+    "/pgx-profile": "pharmacogenomics/pgx-profile",
+    "/prioritize": "clinical/variant-prioritize",
+    "/compare": "clinical/vcf-compare",
 }
 
 COMMAND_DESCRIPTIONS = {
@@ -51,6 +56,8 @@ COMMAND_DESCRIPTIONS = {
     "/cancer": "Somatic cancer mutations (COSMIC)",
     "/domains": "Protein domain annotations (InterPro)",
     "/structure": "Protein structure (AlphaFold + PDB)",
+    "/classify": "ACMG/AMP variant classification",
+    "/pgx-profile": "Pharmacogenomics profile from VCF",
     "/mcp": "Manage MCP servers (connect, status)",
     "/swarm": "Show background analyses",
     "/history": "Session history",
@@ -64,7 +71,7 @@ COMMAND_SECTIONS = [
     ("Analysis", ["/qc", "/align", "/variant-call", "/annotate", "/pipeline"]),
     ("Comparative", ["/blast", "/msa", "/phylo"]),
     ("Exploration", ["/summary", "/search", "/explain", "/lookup"]),
-    ("Clinical", ["/report", "/drug", "/disease", "/frequency"]),
+    ("Clinical", ["/report", "/drug", "/disease", "/frequency", "/classify", "/pgx-profile"]),
     ("Oncology", ["/cancer"]),
     ("Literature", ["/literature"]),
     ("Structural", ["/domains", "/structure"]),
