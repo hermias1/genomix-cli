@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from mcp.server.fastmcp import FastMCP
 from mcp_servers.base_database import BaseDatabaseServer
+from mcp_servers.response_extractors import extract_clinvar_summary, _fallback
 
 mcp = FastMCP("clinvar")
 _ncbi = BaseDatabaseServer(
@@ -40,11 +41,11 @@ def clinvar_fetch(variant_ids: list[str]) -> str:
 
 @mcp.tool()
 def clinvar_summary(variant_ids: list[str]) -> str:
-    """Fetch ClinVar document summaries by variant IDs."""
+    """Fetch ClinVar document summaries — returns clinical significance, gene, conditions."""
     params = {"db": "clinvar", "id": ",".join(variant_ids[:5]), "retmode": "json"}
     try:
         result = _ncbi.get("esummary.fcgi", params)
-        return _ncbi.compact_json(result)
+        return extract_clinvar_summary(result)
     except Exception as e:
         return json.dumps({"error": str(e)})
 

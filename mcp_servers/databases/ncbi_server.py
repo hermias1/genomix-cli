@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from mcp.server.fastmcp import FastMCP
 from mcp_servers.base_database import BaseDatabaseServer
+from mcp_servers.response_extractors import extract_ncbi_gene_summary
 
 mcp = FastMCP("ncbi")
 _ncbi = BaseDatabaseServer(
@@ -59,7 +60,7 @@ def ncbi_gene_info(gene_query: str) -> str:
         if not ids:
             return json.dumps({"error": "No gene found", "query": gene_query})
         summary = _ncbi.get("esummary.fcgi", {"db": "gene", "id": ",".join(ids), "retmode": "json"})
-        return _ncbi.compact_json(summary)
+        return extract_ncbi_gene_summary(summary)
     except Exception as e:
         return json.dumps({"error": str(e)})
 
